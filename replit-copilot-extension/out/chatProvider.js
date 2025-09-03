@@ -627,6 +627,8 @@ class ChatProvider {
         // Initialize
         setTimeout(() => {
             document.getElementById('chatInput').focus();
+            // Request initial settings
+            vscode.postMessage({ type: 'getSettings' });
         }, 100);
     </script>
 </body>
