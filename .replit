@@ -4,6 +4,7 @@ expertMode = true
 
 [nix]
 channel = "stable-25_05"
+packages = ["ollama"]
 
 [workflows]
 runButton = "Project"
@@ -17,6 +18,10 @@ author = "agent"
 task = "workflow.run"
 args = "Extension Development"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Ollama Server"
+
 [[workflows.workflow]]
 name = "Extension Development"
 author = "agent"
@@ -27,3 +32,23 @@ args = "cd replit-copilot-extension && npm run watch"
 
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow]]
+name = "Ollama Server"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "OLLAMA_HOST=0.0.0.0:8000 ollama serve"
+waitForPort = 8000
+
+[[ports]]
+localPort = 8000
+externalPort = 8000
+
+[[ports]]
+localPort = 11434
+externalPort = 80
