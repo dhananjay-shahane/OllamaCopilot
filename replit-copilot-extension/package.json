@@ -10,7 +10,7 @@
     "Other"
   ],
   "activationEvents": [
-    "onView:replitCopilotChat"
+    "onStartupFinished"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -26,12 +26,22 @@
         "category": "Replit"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "replit-copilot",
+          "title": "Replit Copilot",
+          "icon": "$(comment-discussion)"
+        }
+      ]
+    },
     "views": {
-      "explorer": [
+      "replit-copilot": [
         {
           "id": "replitCopilotChat",
-          "name": "Replit Chat",
-          "when": "true"
+          "name": "Chat",
+          "when": "true",
+          "type": "webview"
         }
       ]
     },
