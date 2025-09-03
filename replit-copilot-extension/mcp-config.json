@@ -1,27 +1,44 @@
 {
   "mcpServers": {
-    "example-stdio": {
+    "replit-stdio": {
+      "type": "stdio",
       "command": "node",
-      "args": ["server.js"],
+      "args": ["-e", "console.log('MCP STDIO Server Ready'); process.stdin.pipe(process.stdout);"],
+      "env": {
+        "NODE_ENV": "production",
+        "MCP_TIMEOUT": "5000"
+      },
+      "timeout": 5000,
+      "retries": 2
+    },
+    "local-stdio": {
+      "type": "stdio", 
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-everything"],
       "env": {
         "NODE_ENV": "development"
-      }
+      },
+      "timeout": 3000
     },
-    "example-websocket": {
-      "type": "websocket",
-      "url": "ws://localhost:8080",
-      "apiKey": ""
-    },
-    "example-http": {
+    "fast-http": {
       "type": "http",
-      "url": "http://localhost:8080",
+      "url": "http://localhost:3000",
+      "timeout": 2000,
       "apiKey": ""
     }
   },
-  "defaultServer": "example-stdio",
-  "autoConnect": true,
+  "defaultServer": "replit-stdio",
+  "autoConnect": false,
+  "connectionTimeout": 3000,
+  "requestTimeout": 5000,
   "tools": {
-    "enabled": ["read_file", "create_new_file", "run_terminal_command", "file_glob_search", "view_diff"],
-    "automatic": true
+    "enabled": ["read_file", "create_new_file", "run_terminal_command", "file_glob_search", "view_diff", "ls", "grep_search"],
+    "automatic": false,
+    "timeout": 3000
+  },
+  "performance": {
+    "maxConcurrentRequests": 3,
+    "responseBufferSize": 1024,
+    "enableStreaming": true
   }
 }
