@@ -1,0 +1,80 @@
+Core Steps and Architecture
+1. VS Code Extension Scaffold
+
+Start with the official Yeoman generator for TypeScript extensions:
+
+text
+npx --package yo --package generator-code -- yo code
+This sets up the VS Code extension environment using TypeScript, ready for UI and backend logic.
+
+2. UI Implementation: Copilot-like Experience
+
+Use VS Code's Webview API to create custom, rich UIs. Modern React or Next.js (as static build) can be included in the webview for a dynamic experience.
+
+Replicate the Copilot sidebar and chat popup interaction. Use local state or Redux/TanStack Query for React state.
+
+3. Workflow: Step-by-Step Prompts
+
+Implement a prompt builder flow for Replit, guiding users using UI cards, similar to Copilot’s suggest/accept/modify workflow.
+
+Each “step” can dispatch commands to the VS Code extension backend or directly to an LLM, as appropriate.
+
+4. Connecting to MCP Server and Client
+
+Add configuration screens in the webview/sidebar to input and update MCP server endpoints and authentication details.
+
+Use VS Code's workspace/configuration API to store user preferences securely.
+
+5. Integrating Local Ollama Models
+
+Provide a config area (in settings UI or a config file) for users to specify LLM endpoint (e.g., Ollama running locally at localhost:11434).
+
+Use the Continue extension approach: manage a models array in a config, let users choose or modify models, and route prompt completions through the MCP server/local Ollama API.
+
+6. Workflow Files: Read, Edit, Update, Delete
+
+Use VS Code’s file API to list, open, modify, or delete workflow/code files.
+
+Let the LLM suggest edits, which the extension can preview and apply.
+
+Technology Stack
+Frontend (UI): React or Next.js in a Webview (styled like Copilot)
+
+Backend/Integration: TypeScript, VS Code Extension API
+
+Communication: REST/WS to MCP server, direct fetch to Ollama LLM local HTTP API
+
+Config/UI: Build user-friendly interface for MCP/LLM config and workflow management
+
+Important References and Inspiration
+The Continue VS Code extension: demonstrates model/config integration, local LLMs, chat UIs, and file operations, all within VS Code.
+
+Copilot Vision and Edits: shows how advanced Copilot versions present inline suggestions and edit flows in VS Code’s UI.
+
+Example: Ollama Model Configuration (similar to Continue)
+json
+"models": [
+  {
+    "title": "my-local-model",
+    "model": "some-model-name",
+    "provider": "ollama",
+    "apiBase": "http://localhost:11434",
+    "systemMessage": "You are an expert coder assistant.",
+    "apiKey": ""
+  }
+]
+Expose this model picker/configurator in extension UI.
+
+File Operations and Workflow
+Use:
+
+vscode.workspace.openTextDocument
+
+vscode.workspace.applyEdit
+
+vscode.workspace.fs.delete
+
+Connect these to UI actions and LLM outcomes.
+
+For the best modern developer experience, build with TypeScript + React for the UI, use the Continue extension’s architecture as a reference for LLM integration, and provide user-facing configuration for the MCP server and local model setup. This approach will replicate Copilot-style UI and functionality, tailored for your advanced workflow needs.
+
