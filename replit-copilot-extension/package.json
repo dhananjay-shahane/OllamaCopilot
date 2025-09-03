@@ -1,0 +1,78 @@
+{
+  "name": "replit-copilot-extension",
+  "displayName": "Replit Copilot Extension",
+  "description": "A Copilot-like extension for Replit with MCP server and Ollama integration",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "replit-copilot.openChat",
+        "title": "Open Replit Chat",
+        "category": "Replit"
+      },
+      {
+        "command": "replit-copilot.configure",
+        "title": "Configure MCP & LLM Settings",
+        "category": "Replit"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "replitCopilotChat",
+          "name": "Replit Chat",
+          "when": "true"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Replit Copilot",
+      "properties": {
+        "replitCopilot.mcpServerUrl": {
+          "type": "string",
+          "default": "",
+          "description": "MCP Server URL endpoint"
+        },
+        "replitCopilot.ollamaUrl": {
+          "type": "string",
+          "default": "http://localhost:11434",
+          "description": "Local Ollama server URL"
+        },
+        "replitCopilot.defaultModel": {
+          "type": "string",
+          "default": "llama3.2",
+          "description": "Default Ollama model to use"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.74.0",
+    "@types/node": "16.x",
+    "@typescript-eslint/eslint-plugin": "^5.45.0",
+    "@typescript-eslint/parser": "^5.45.0",
+    "eslint": "^8.28.0",
+    "typescript": "^4.9.4"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "ws": "^8.14.0",
+    "@types/ws": "^8.5.0"
+  }
+}
