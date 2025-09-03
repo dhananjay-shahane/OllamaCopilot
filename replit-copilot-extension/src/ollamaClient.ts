@@ -13,7 +13,7 @@ export interface ChatMessage {
 }
 
 export class OllamaClient {
-    private config: OllamaConfig = { url: 'https://4ad8c7d84490.ngrok-free.app', model: 'llama3.2:1b' };
+    private config: OllamaConfig = { url: 'https://ea22b928195e.ngrok-free.app', model: 'llama3.2:1b' };
     private conversationHistory: ChatMessage[] = [];
 
     constructor() {
@@ -23,7 +23,7 @@ export class OllamaClient {
     public updateConfiguration() {
         const config = vscode.workspace.getConfiguration('replitCopilot');
         this.config = {
-            url: config.get<string>('ollamaUrl') || 'https://4ad8c7d84490.ngrok-free.app',
+            url: config.get<string>('ollamaUrl') || 'https://ea22b928195e.ngrok-free.app',
             model: config.get<string>('defaultModel') || 'llama3.2:1b',
             systemMessage: config.get<string>('systemMessage') || this.getEnhancedSystemMessage()
         };

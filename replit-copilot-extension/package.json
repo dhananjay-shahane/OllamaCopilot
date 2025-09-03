@@ -55,7 +55,7 @@
         },
         "replitCopilot.ollamaUrl": {
           "type": "string",
-          "default": "https://4ad8c7d84490.ngrok-free.app",
+          "default": "https://ea22b928195e.ngrok-free.app",
           "description": "Ollama server URL"
         },
         "replitCopilot.defaultModel": {

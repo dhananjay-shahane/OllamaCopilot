@@ -5,14 +5,14 @@ const vscode = require("vscode");
 const axios_1 = require("axios");
 class OllamaClient {
     constructor() {
-        this.config = { url: 'https://4ad8c7d84490.ngrok-free.app', model: 'llama3.2:1b' };
+        this.config = { url: 'https://ea22b928195e.ngrok-free.app', model: 'llama3.2:1b' };
         this.conversationHistory = [];
         this.updateConfiguration();
     }
     updateConfiguration() {
         const config = vscode.workspace.getConfiguration('replitCopilot');
         this.config = {
-            url: config.get('ollamaUrl') || 'https://4ad8c7d84490.ngrok-free.app',
+            url: config.get('ollamaUrl') || 'https://ea22b928195e.ngrok-free.app',
             model: config.get('defaultModel') || 'llama3.2:1b',
             systemMessage: config.get('systemMessage') || this.getEnhancedSystemMessage()
         };
