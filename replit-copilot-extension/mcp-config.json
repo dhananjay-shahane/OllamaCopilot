@@ -1,0 +1,27 @@
+{
+  "mcpServers": {
+    "example-stdio": {
+      "command": "node",
+      "args": ["server.js"],
+      "env": {
+        "NODE_ENV": "development"
+      }
+    },
+    "example-websocket": {
+      "type": "websocket",
+      "url": "ws://localhost:8080",
+      "apiKey": ""
+    },
+    "example-http": {
+      "type": "http",
+      "url": "http://localhost:8080",
+      "apiKey": ""
+    }
+  },
+  "defaultServer": "example-stdio",
+  "autoConnect": true,
+  "tools": {
+    "enabled": ["read_file", "create_new_file", "run_terminal_command", "file_glob_search", "view_diff"],
+    "automatic": true
+  }
+}

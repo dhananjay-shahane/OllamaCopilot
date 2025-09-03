@@ -43,6 +43,15 @@ class ChatProvider {
                 case 'refreshModels':
                     await this.handleRefreshModels();
                     break;
+                case 'changeModel':
+                    await this.handleChangeModel(message.model);
+                    break;
+                case 'addMCPServer':
+                    await this.handleAddMCPServer(message.config);
+                    break;
+                case 'attachFile':
+                    await this.handleAttachFile();
+                    break;
             }
         }, undefined);
     }
@@ -53,12 +62,25 @@ class ChatProvider {
                 type: 'userMessage',
                 message: message
             });
-            // Get response from Ollama
-            const response = await this.ollamaClient.chat(message);
-            // Add assistant message to chat
+            // Show typing indicator
+            this.postMessage({
+                type: 'startTyping'
+            });
+            // Get streaming response from Ollama
+            let fullResponse = '';
+            const response = await this.ollamaClient.chat(message, (token) => {
+                fullResponse += token;
+                this.postMessage({
+                    type: 'streamToken',
+                    token: token,
+                    fullMessage: fullResponse
+                });
+            });
+            // Final complete message
             this.postMessage({
                 type: 'assistantMessage',
-                message: response
+                message: response,
+                formatted: this.formatMessage(response)
             });
             // Check if response suggests file operations
             if (response.includes('file:') || response.includes('edit:')) {
@@ -75,6 +97,26 @@ class ChatProvider {
                 message: `Error: ${error}`
             });
         }
+    }
+    formatMessage(message) {
+        // Format code blocks
+        let formatted = message.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, language, code) => {
+            return `<pre class="code-block"><code class="language-${language || 'text'}">${this.escapeHtml(code.trim())}</code></pre>`;
+        });
+        // Format inline code
+        formatted = formatted.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
+        // Format bold text
+        formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        // Format italic text
+        formatted = formatted.replace(/\*(.*?)\*/g, '<em>$1</em>');
+        // Convert line breaks
+        formatted = formatted.replace(/\n/g, '<br>');
+        return formatted;
+    }
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
     async handleApplyEdit(edit) {
         try {
@@ -188,6 +230,52 @@ class ChatProvider {
                 message: `Failed to refresh models: ${error}`
             });
         }
+    }
+    async handleChangeModel(model) {
+        try {
+            const config = vscode.workspace.getConfiguration('replitCopilot');
+            await config.update('defaultModel', model, vscode.ConfigurationTarget.Global);
+            this.ollamaClient.updateConfiguration();
+        }
+        catch (error) {
+            this.postMessage({
+                type: 'error',
+                message: `Failed to change model: ${error}`
+            });
+        }
+    }
+    async handleAddMCPServer(config) {
+        try {
+            // For now, just update the configuration with the MCP server details
+            // In a full implementation, you'd save this to a configuration file
+            const serverConfig = vscode.workspace.getConfiguration('replitCopilot');
+            if (config.type === 'stdio') {
+                await serverConfig.update('mcpServerStdio', config, vscode.ConfigurationTarget.Global);
+            }
+            else {
+                await serverConfig.update('mcpServerUrl', config.url, vscode.ConfigurationTarget.Global);
+                await serverConfig.update('mcpApiKey', config.apiKey, vscode.ConfigurationTarget.Global);
+            }
+            this.mcpClient.updateConfiguration();
+            this.postMessage({
+                type: 'connectionTest',
+                message: `✅ MCP Server "${config.name}" added successfully!`
+            });
+        }
+        catch (error) {
+            this.postMessage({
+                type: 'error',
+                message: `Failed to add MCP server: ${error}`
+            });
+        }
+    }
+    async handleAttachFile() {
+        // This would integrate with VS Code's file picker
+        // For now, just show a message
+        this.postMessage({
+            type: 'connectionTest',
+            message: '📎 File attachment feature coming soon!'
+        });
     }
     postMessage(message) {
         if (this._view) {
@@ -589,18 +677,338 @@ class ChatProvider {
             background: var(--copilot-primary);
             color: white;
         }
+
+        /* New UI Styles */
+        .header-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: var(--copilot-bg);
+            border-bottom: 1px solid var(--copilot-border);
+        }
+
+        .tool-button {
+            background: transparent;
+            border: none;
+            color: var(--copilot-text);
+            cursor: pointer;
+            padding: 6px 8px;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+
+        .tool-button:hover {
+            background: var(--copilot-input-bg);
+        }
+
+        .header-spacer {
+            flex: 1;
+        }
+
+        .agent-status {
+            font-size: 11px;
+            color: var(--copilot-muted);
+        }
+
+        .agent-selector {
+            padding: 12px 16px;
+            background: var(--copilot-bg);
+            border-bottom: 1px solid var(--copilot-border);
+        }
+
+        .agent-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .agent-icon {
+            font-size: 16px;
+        }
+
+        .agent-name {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--copilot-text);
+        }
+
+        .agent-model-dropdown {
+            padding: 4px 8px;
+            border: 1px solid var(--copilot-input-border);
+            border-radius: 4px;
+            background: var(--copilot-input-bg);
+            color: var(--copilot-text);
+            font-size: 11px;
+            margin-left: auto;
+        }
+
+        .add-mcp-button {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px dashed var(--copilot-border);
+            border-radius: 4px;
+            background: transparent;
+            color: var(--copilot-primary);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .add-mcp-button:hover {
+            background: var(--copilot-input-bg);
+            border-color: var(--copilot-primary);
+        }
+
+        .attach-button {
+            background: transparent;
+            border: none;
+            color: var(--copilot-muted);
+            cursor: pointer;
+            padding: 8px;
+            font-size: 14px;
+            transition: color 0.2s;
+        }
+
+        .attach-button:hover {
+            color: var(--copilot-text);
+        }
+
+        .input-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .file-counter {
+            font-size: 11px;
+            color: var(--copilot-muted);
+            white-space: nowrap;
+        }
+
+        .send-button {
+            background: var(--copilot-primary);
+            border: none;
+            color: white;
+            cursor: pointer;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: var(--copilot-bg);
+            border: 1px solid var(--copilot-border);
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow: hidden;
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--copilot-border);
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--copilot-text);
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--copilot-muted);
+            cursor: pointer;
+            font-size: 18px;
+            padding: 4px;
+        }
+
+        .modal-body {
+            padding: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .mcp-config-section {
+            margin-bottom: 16px;
+        }
+
+        .config-label {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--copilot-text);
+        }
+
+        .config-input, .config-select, .config-textarea {
+            padding: 8px 12px;
+            border: 1px solid var(--copilot-input-border);
+            border-radius: 4px;
+            background: var(--copilot-input-bg);
+            color: var(--copilot-text);
+            font-size: 12px;
+            width: 100%;
+        }
+
+        .config-textarea {
+            min-height: 60px;
+            resize: vertical;
+        }
+
+        .modal-footer {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+            padding: 16px 20px;
+            border-top: 1px solid var(--copilot-border);
+        }
+
+        .modal-button {
+            padding: 8px 16px;
+            border: 1px solid var(--copilot-primary);
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .modal-button.primary {
+            background: var(--copilot-primary);
+            color: white;
+        }
+
+        .modal-button.secondary {
+            background: transparent;
+            color: var(--copilot-primary);
+        }
+
+        .modal-button:hover {
+            background: var(--copilot-primary-hover);
+            color: white;
+        }
+
+        /* Code formatting styles */
+        .code-block {
+            background: var(--vscode-textCodeBlock-background);
+            border: 1px solid var(--copilot-border);
+            border-radius: 4px;
+            padding: 12px;
+            margin: 8px 0;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            line-height: 1.4;
+        }
+
+        .inline-code {
+            background: var(--vscode-textCodeBlock-background);
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+        }
+
+        /* Typing animation */
+        .typing-indicator {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            color: var(--copilot-muted);
+            font-style: italic;
+        }
+
+        .typing-dots {
+            display: flex;
+            gap: 2px;
+        }
+
+        .typing-dot {
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            background: var(--copilot-muted);
+            animation: typingBounce 1.4s infinite ease-in-out;
+        }
+
+        .typing-dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing-dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes typingBounce {
+            0%, 80%, 100% {
+                transform: scale(0.8);
+                opacity: 0.5;
+            }
+            40% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="chat-header">
-        <div class="chat-title">
-            <div class="copilot-icon">O</div>
-            Ollama Chat
-            <button class="settings-button" onclick="toggleSettings()" title="Settings">
-                ⚙️
+        <div class="header-toolbar">
+            <button class="tool-button" onclick="goBack()" title="Back">←</button>
+            <button class="tool-button" onclick="openFork()" title="Fork">🔀</button>
+            <button class="tool-button" onclick="openEdit()" title="Edit">✏️</button>
+            <button class="tool-button" onclick="openChat()" title="Chat">💬</button>
+            <button class="tool-button" onclick="openTools()" title="Tools">🔧</button>
+            <button class="tool-button" onclick="toggleMCP()" title="MCP">📡</button>
+            <span class="header-spacer"></span>
+            <span class="agent-status">🟢 Local Agent</span>
+            <button class="settings-button" onclick="toggleSettings()" title="Settings">⚙️</button>
+        </div>
+    </div>
+
+    <div class="agent-selector">
+        <div class="agent-info">
+            <span class="agent-icon">🤖</span>
+            <span class="agent-name">Agent</span>
+            <select id="agentModelSelect" class="agent-model-dropdown">
+                <option value="llama3.2:1b">Llama3.2 1B</option>
+                <option value="llama3.2:3b">Llama3.2 3B</option>
+                <option value="llama3.2">Llama3.2</option>
+                <option value="llama3.1">Llama3.1</option>
+                <option value="codellama">CodeLlama</option>
+            </select>
+        </div>
+        <div class="mcp-servers" id="mcpServersList" style="display: none;">
+            <button class="add-mcp-button" onclick="showMCPModal()">
+                ➕ Add MCP Servers
             </button>
         </div>
-        <div class="chat-subtitle">AI assistant powered by Ollama</div>
     </div>
 
     <div class="settings-panel" id="settingsPanel" style="display: none;">
@@ -650,22 +1058,72 @@ class ChatProvider {
     <div class="input-area">
         <div class="input-container">
             <div class="input-wrapper">
+                <button class="attach-button" onclick="attachFile()" title="Attach file">📎</button>
                 <textarea 
                     id="chatInput" 
                     class="chat-input" 
-                    placeholder="Ask Ollama Chat..."
+                    placeholder="Ask about this codebase..."
                     rows="1"
                     maxlength="4000"
                 ></textarea>
-                <button id="sendButton" class="send-button" title="Send message">
-                    ▶
-                </button>
+                <div class="input-actions">
+                    <span class="file-counter" id="fileCounter">Alt⌘ Active file</span>
+                    <button id="sendButton" class="send-button" title="Send message">
+                        Enter
+                    </button>
+                </div>
             </div>
-            <div class="suggestions" id="suggestions">
-                <button class="suggestion" onclick="insertSuggestion('Explain this code')">Explain this code</button>
-                <button class="suggestion" onclick="insertSuggestion('Write a function to...')">Write a function</button>
-                <button class="suggestion" onclick="insertSuggestion('Debug this error')">Debug error</button>
-                <button class="suggestion" onclick="insertSuggestion('Optimize my code')">Optimize code</button>
+        </div>
+    </div>
+
+    <!-- MCP Modal -->
+    <div class="modal-overlay" id="mcpModal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add MCP Servers</h3>
+                <button class="modal-close" onclick="closeMCPModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="mcp-config-section">
+                    <label class="config-label">
+                        Server Name:
+                        <input type="text" id="mcpServerName" class="config-input" placeholder="My MCP Server" />
+                    </label>
+                </div>
+                <div class="mcp-config-section">
+                    <label class="config-label">
+                        Connection Type:
+                        <select id="mcpConnectionType" class="config-select">
+                            <option value="stdio">STDIO</option>
+                            <option value="websocket">WebSocket</option>
+                            <option value="http">HTTP</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="mcp-config-section" id="stdioConfig">
+                    <label class="config-label">
+                        Command:
+                        <input type="text" id="mcpCommand" class="config-input" placeholder="node server.js" />
+                    </label>
+                    <label class="config-label">
+                        Arguments (one per line):
+                        <textarea id="mcpArgs" class="config-textarea" placeholder="--port 3000\n--verbose"></textarea>
+                    </label>
+                </div>
+                <div class="mcp-config-section" id="urlConfig" style="display: none;">
+                    <label class="config-label">
+                        Server URL:
+                        <input type="text" id="mcpUrl" class="config-input" placeholder="ws://localhost:8080 or http://localhost:8080" />
+                    </label>
+                    <label class="config-label">
+                        API Key (optional):
+                        <input type="password" id="mcpKey" class="config-input" placeholder="Enter API key..." />
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-button secondary" onclick="closeMCPModal()">Cancel</button>
+                <button class="modal-button primary" onclick="addMCPServer()">Add Server</button>
             </div>
         </div>
     </div>
@@ -678,6 +1136,7 @@ class ChatProvider {
             const chatInput = document.getElementById('chatInput');
             const sendButton = document.getElementById('sendButton');
             let isThinking = false;
+            let currentStreamingMessage = null;
 
             chatInput.addEventListener('input', function() {
                 this.style.height = 'auto';
@@ -819,12 +1278,176 @@ class ChatProvider {
                 });
             }
 
+            // Streaming and typing functions
+            function showTypingIndicator() {
+                if (currentStreamingMessage) return;
+                
+                const typingDiv = document.createElement('div');
+                typingDiv.className = 'message assistant-message typing-message';
+                typingDiv.innerHTML = \`
+                    <div class="message-header">
+                        <div class="message-avatar assistant-avatar">O</div>
+                        <span>Ollama Chat</span>
+                    </div>
+                    <div class="message-content typing-indicator">
+                        <span>Thinking</span>
+                        <div class="typing-dots">
+                            <div class="typing-dot"></div>
+                            <div class="typing-dot"></div>
+                            <div class="typing-dot"></div>
+                        </div>
+                    </div>
+                \`;
+                
+                messagesWrapper.appendChild(typingDiv);
+                scrollToBottom();
+                isThinking = true;
+            }
+
+            function hideTypingIndicator() {
+                const typingMsg = document.querySelector('.typing-message');
+                if (typingMsg) {
+                    typingMsg.remove();
+                }
+                isThinking = false;
+            }
+
+            function handleStreamingToken(token, fullMessage) {
+                if (!currentStreamingMessage) {
+                    // Create new streaming message
+                    currentStreamingMessage = document.createElement('div');
+                    currentStreamingMessage.className = 'message assistant-message streaming-message';
+                    currentStreamingMessage.innerHTML = \`
+                        <div class="message-header">
+                            <div class="message-avatar assistant-avatar">O</div>
+                            <span>Ollama Chat</span>
+                        </div>
+                        <div class="message-content"></div>
+                    \`;
+                    messagesWrapper.appendChild(currentStreamingMessage);
+                }
+
+                // Update content with typing effect
+                const contentDiv = currentStreamingMessage.querySelector('.message-content');
+                contentDiv.textContent = fullMessage;
+                scrollToBottom();
+            }
+
+            function finalizeStreamingMessage(finalMessage, formattedMessage) {
+                if (currentStreamingMessage) {
+                    const contentDiv = currentStreamingMessage.querySelector('.message-content');
+                    contentDiv.innerHTML = formattedMessage || finalMessage;
+                    currentStreamingMessage.classList.remove('streaming-message');
+                    currentStreamingMessage = null;
+                }
+                scrollToBottom();
+            }
+
+            function updateModelDropdowns(models) {
+                const modelSelects = ['modelSelect', 'agentModelSelect'];
+                modelSelects.forEach(selectId => {
+                    const select = document.getElementById(selectId);
+                    if (select) {
+                        const currentValue = select.value;
+                        select.innerHTML = '';
+                        const modelsToUse = models.length > 0 ? models : ['llama3.2:1b', 'llama3.2:3b', 'llama3.2', 'llama3.1', 'codellama'];
+                        modelsToUse.forEach(model => {
+                            const option = document.createElement('option');
+                            option.value = model;
+                            option.textContent = model;
+                            select.appendChild(option);
+                        });
+                        if (modelsToUse.includes(currentValue)) {
+                            select.value = currentValue;
+                        }
+                    }
+                });
+            }
+
+            // UI action functions
+            function goBack() { /* Navigate back */ }
+            function openFork() { /* Open fork functionality */ }
+            function openEdit() { /* Open edit mode */ }
+            function openChat() { /* Focus on chat */ chatInput.focus(); }
+            function openTools() { /* Show tools panel */ }
+            function toggleMCP() {
+                const mcpList = document.getElementById('mcpServersList');
+                mcpList.style.display = mcpList.style.display === 'none' ? 'block' : 'none';
+            }
+
+            function attachFile() {
+                vscode.postMessage({ type: 'attachFile' });
+            }
+
+            function showMCPModal() {
+                document.getElementById('mcpModal').style.display = 'flex';
+                
+                // Handle connection type change
+                const connectionType = document.getElementById('mcpConnectionType');
+                const stdioConfig = document.getElementById('stdioConfig');
+                const urlConfig = document.getElementById('urlConfig');
+                
+                connectionType.addEventListener('change', function() {
+                    if (this.value === 'stdio') {
+                        stdioConfig.style.display = 'block';
+                        urlConfig.style.display = 'none';
+                    } else {
+                        stdioConfig.style.display = 'none';
+                        urlConfig.style.display = 'block';
+                    }
+                });
+            }
+
+            function closeMCPModal() {
+                document.getElementById('mcpModal').style.display = 'none';
+            }
+
+            function addMCPServer() {
+                const name = document.getElementById('mcpServerName').value;
+                const type = document.getElementById('mcpConnectionType').value;
+                
+                let config = { name, type };
+                
+                if (type === 'stdio') {
+                    config.command = document.getElementById('mcpCommand').value;
+                    config.args = document.getElementById('mcpArgs').value.split('\n').filter(arg => arg.trim());
+                } else {
+                    config.url = document.getElementById('mcpUrl').value;
+                    config.apiKey = document.getElementById('mcpKey').value;
+                }
+                
+                vscode.postMessage({
+                    type: 'addMCPServer',
+                    config: config
+                });
+                
+                closeMCPModal();
+            }
+
+            // Model selection handler
+            document.getElementById('agentModelSelect').addEventListener('change', function() {
+                vscode.postMessage({
+                    type: 'changeModel',
+                    model: this.value
+                });
+            });
+
             // Make functions global
             window.insertSuggestion = insertSuggestion;
             window.toggleSettings = toggleSettings;
             window.saveSettings = saveSettings;
             window.testConnection = testConnection;
             window.refreshModels = refreshModels;
+            window.goBack = goBack;
+            window.openFork = openFork;
+            window.openEdit = openEdit;
+            window.openChat = openChat;
+            window.openTools = openTools;
+            window.toggleMCP = toggleMCP;
+            window.attachFile = attachFile;
+            window.showMCPModal = showMCPModal;
+            window.closeMCPModal = closeMCPModal;
+            window.addMCPServer = addMCPServer;
 
             sendButton.addEventListener('click', sendMessage);
             
@@ -841,30 +1464,28 @@ class ChatProvider {
                 sendButton.disabled = false;
 
                 switch (message.type) {
+                    case 'startTyping':
+                        showTypingIndicator();
+                        break;
+                    case 'streamToken':
+                        handleStreamingToken(message.token, message.fullMessage);
+                        break;
                     case 'assistantMessage':
-                        addMessage(message.message, false);
+                        hideTypingIndicator();
+                        finalizeStreamingMessage(message.message, message.formatted);
                         break;
                     case 'error':
+                        hideTypingIndicator();
                         addMessage('❌ ' + message.message, false);
                         break;
                     case 'settingsLoaded':
                         document.getElementById('modelSelect').value = message.settings.model || 'llama3.2:1b';
+                        document.getElementById('agentModelSelect').value = message.settings.model || 'llama3.2:1b';
                         document.getElementById('mcpServerUrl').value = message.settings.mcpServerUrl || '';
                         document.getElementById('mcpApiKey').value = message.settings.mcpApiKey || '';
                         break;
                     case 'modelsRefreshed':
-                        const modelSelect = document.getElementById('modelSelect');
-                        const currentValue = modelSelect.value;
-                        modelSelect.innerHTML = '';
-                        message.models.forEach(model => {
-                            const option = document.createElement('option');
-                            option.value = model;
-                            option.textContent = model;
-                            modelSelect.appendChild(option);
-                        });
-                        if (message.models.includes(currentValue)) {
-                            modelSelect.value = currentValue;
-                        }
+                        updateModelDropdowns(message.models);
                         break;
                     case 'connectionTest':
                         addMessage(message.message, false);

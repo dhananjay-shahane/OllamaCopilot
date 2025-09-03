@@ -46,7 +46,7 @@ class OllamaClient {
             return [];
         }
     }
-    async chat(message, includeContext = true) {
+    async chat(message, onToken, includeContext = true) {
         try {
             // Add user message to history
             this.conversationHistory.push({
@@ -59,7 +59,7 @@ class OllamaClient {
                     { role: 'system', content: this.config.systemMessage },
                     { role: 'user', content: message }
                 ],
-                stream: false,
+                stream: true, // Enable streaming for faster responses
                 options: {
                     temperature: 0.7,
                     top_p: 0.9,
@@ -67,22 +67,55 @@ class OllamaClient {
                 }
             };
             const response = await axios_1.default.post(`${this.config.url}/api/chat`, payload, {
-                timeout: 60000 // 60 seconds timeout for LLM responses
+                responseType: 'stream',
+                timeout: 60000
             });
-            const assistantMessage = response.data.message?.content || 'Sorry, I couldn\'t generate a response.';
-            // Add assistant response to history
-            this.conversationHistory.push({
-                role: 'assistant',
-                content: assistantMessage
+            let assistantMessage = '';
+            return new Promise((resolve, reject) => {
+                response.data.on('data', (chunk) => {
+                    const lines = chunk.toString().split('\n');
+                    for (const line of lines) {
+                        if (line.trim() === '')
+                            continue;
+                        try {
+                            const data = JSON.parse(line);
+                            if (data.message?.content) {
+                                const token = data.message.content;
+                                assistantMessage += token;
+                                if (onToken) {
+                                    onToken(token);
+                                }
+                            }
+                            if (data.done) {
+                                // Add complete assistant response to history
+                                this.conversationHistory.push({
+                                    role: 'assistant',
+                                    content: assistantMessage
+                                });
+                                // Keep conversation history manageable
+                                if (this.conversationHistory.length > 21) {
+                                    this.conversationHistory = [
+                                        this.conversationHistory[0],
+                                        ...this.conversationHistory.slice(-20)
+                                    ];
+                                }
+                                resolve(assistantMessage || 'Sorry, I couldn\'t generate a response.');
+                            }
+                        }
+                        catch (e) {
+                            // Ignore JSON parsing errors for incomplete chunks
+                        }
+                    }
+                });
+                response.data.on('error', (error) => {
+                    reject(error);
+                });
+                response.data.on('end', () => {
+                    if (assistantMessage === '') {
+                        resolve('Sorry, I couldn\'t generate a response.');
+                    }
+                });
             });
-            // Keep conversation history manageable (last 20 messages)
-            if (this.conversationHistory.length > 21) { // 1 system + 20 conversation messages
-                this.conversationHistory = [
-                    this.conversationHistory[0], // Keep system message
-                    ...this.conversationHistory.slice(-20) // Keep last 20 messages
-                ];
-            }
-            return assistantMessage;
         }
         catch (error) {
             console.error('Ollama chat error:', error);
@@ -100,17 +133,17 @@ class OllamaClient {
             return `Error communicating with Ollama: ${error}`;
         }
     }
-    async generateCode(prompt, language) {
+    async generateCode(prompt, language, onToken) {
         const codePrompt = `${language ? `Generate ${language} code for: ` : 'Generate code for: '}${prompt}\n\nPlease provide clean, well-commented code with explanations.`;
-        return await this.chat(codePrompt, false);
+        return await this.chat(codePrompt, onToken, false);
     }
-    async explainCode(code, language) {
+    async explainCode(code, language, onToken) {
         const explainPrompt = `Explain this ${language || ''} code:\n\n\`\`\`${language || ''}\n${code}\n\`\`\`\n\nPlease provide a clear explanation of what this code does, how it works, and any notable patterns or best practices used.`;
-        return await this.chat(explainPrompt, false);
+        return await this.chat(explainPrompt, onToken, false);
     }
-    async suggestImprovements(code, language) {
+    async suggestImprovements(code, language, onToken) {
         const improvePrompt = `Review and suggest improvements for this ${language || ''} code:\n\n\`\`\`${language || ''}\n${code}\n\`\`\`\n\nPlease suggest specific improvements for performance, readability, maintainability, or best practices.`;
-        return await this.chat(improvePrompt, false);
+        return await this.chat(improvePrompt, onToken, false);
     }
     clearHistory() {
         this.conversationHistory = [

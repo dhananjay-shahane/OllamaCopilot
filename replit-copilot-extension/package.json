@@ -67,6 +67,11 @@
           "type": "string",
           "default": "",
           "description": "MCP Server API Key (optional)"
+        },
+        "replitCopilot.mcpServerStdio": {
+          "type": "object",
+          "default": {},
+          "description": "MCP Server STDIO configuration"
         }
       }
     }
