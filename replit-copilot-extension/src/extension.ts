@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
 import { ChatProvider } from './chatProvider';
-import { MCPClient } from './mcpClient';
+import { EnhancedMCPClient } from './enhancedMcpClient';
 import { OllamaClient } from './ollamaClient';
-import { FileOperationsManager } from './fileOperations';
+import { FileOperationsManager } from './fileOperationsManager';
 
 let chatProvider: ChatProvider;
-let mcpClient: MCPClient;
+let mcpClient: EnhancedMCPClient;
 let ollamaClient: OllamaClient;
 let fileOpsManager: FileOperationsManager;
 
@@ -14,7 +14,7 @@ export function activate(context: vscode.ExtensionContext) {
     
     try {
         // Initialize services
-        mcpClient = new MCPClient();
+        mcpClient = new EnhancedMCPClient();
         ollamaClient = new OllamaClient();
         fileOpsManager = new FileOperationsManager();
         chatProvider = new ChatProvider(context.extensionUri, mcpClient, ollamaClient, fileOpsManager);

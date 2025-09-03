@@ -4,9 +4,9 @@ exports.activate = activate;
 exports.deactivate = deactivate;
 const vscode = require("vscode");
 const chatProvider_1 = require("./chatProvider");
-const mcpClient_1 = require("./mcpClient");
+const enhancedMcpClient_1 = require("./enhancedMcpClient");
 const ollamaClient_1 = require("./ollamaClient");
-const fileOperations_1 = require("./fileOperations");
+const fileOperationsManager_1 = require("./fileOperationsManager");
 let chatProvider;
 let mcpClient;
 let ollamaClient;
@@ -15,9 +15,9 @@ function activate(context) {
     console.log('[OLLAMA-CHAT] Ollama Chat Extension is now active!');
     try {
         // Initialize services
-        mcpClient = new mcpClient_1.MCPClient();
+        mcpClient = new enhancedMcpClient_1.EnhancedMCPClient();
         ollamaClient = new ollamaClient_1.OllamaClient();
-        fileOpsManager = new fileOperations_1.FileOperationsManager();
+        fileOpsManager = new fileOperationsManager_1.FileOperationsManager();
         chatProvider = new chatProvider_1.ChatProvider(context.extensionUri, mcpClient, ollamaClient, fileOpsManager);
         // Register the webview provider
         console.log('[OLLAMA-CHAT] Registering webview provider with ID:', chatProvider_1.ChatProvider.viewType);

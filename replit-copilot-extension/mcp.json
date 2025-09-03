@@ -10,27 +10,5 @@
         "C:\\Users\\Dhananjay\\Desktop\\my_mcp\\mcp_server.py"
       ]
     },
-    "replit_stdio": {
-      "type": "stdio", 
-      "command": "node",
-      "args": [
-        "-e",
-        "console.log('MCP Ready'); const readline = require('readline'); const rl = readline.createInterface({input: process.stdin, output: process.stdout}); rl.on('line', (input) => { try { const req = JSON.parse(input); const res = {jsonrpc: '2.0', id: req.id, result: {status: 'ok', method: req.method, timestamp: Date.now()}}; console.log(JSON.stringify(res)); } catch(e) { console.log(JSON.stringify({jsonrpc: '2.0', id: 1, error: {code: -1, message: e.message}})); }});"
-      ]
-    },
-    "fast_local": {
-      "type": "stdio",
-      "command": "npx", 
-      "args": [
-        "@modelcontextprotocol/server-everything"
-      ]
-    }
-  },
   "inputs": [],
-  "defaults": {
-    "connectionTimeout": 2000,
-    "requestTimeout": 3000,
-    "enableStreaming": true,
-    "fastMode": true
-  }
 }

@@ -92,21 +92,6 @@
           "type": "boolean", 
           "default": true,
           "description": "Enable fast mode with reduced timeouts"
-        },
-        "replitCopilot.mcpConfigFile": {
-          "type": "string",
-          "default": "",
-          "description": "Path to MCP JSON configuration file (mcp.json)"
-        },
-        "replitCopilot.enableFileOperations": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable file operations through chat commands"
-        },
-        "replitCopilot.workspaceRoot": {
-          "type": "string",
-          "default": "",
-          "description": "Workspace root directory for file operations"
         }
       }
     }
