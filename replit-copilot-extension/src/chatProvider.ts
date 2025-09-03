@@ -20,6 +20,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         context: vscode.WebviewViewResolveContext,
         _token: vscode.CancellationToken,
     ) {
+        console.log('🎯 Replit Chat webview is being resolved');
         this._view = webviewView;
 
         webviewView.webview.options = {

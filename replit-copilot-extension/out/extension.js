@@ -11,7 +11,8 @@ let mcpClient;
 let ollamaClient;
 let fileOpsManager;
 function activate(context) {
-    console.log('Replit Copilot Extension is now active!');
+    console.log('🚀 Replit Copilot Extension is now active!');
+    vscode.window.showInformationMessage('Replit Copilot Extension loaded successfully!');
     // Initialize services
     mcpClient = new mcpClient_1.MCPClient();
     ollamaClient = new ollamaClient_1.OllamaClient();

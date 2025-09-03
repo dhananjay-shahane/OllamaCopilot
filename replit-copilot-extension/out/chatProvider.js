@@ -9,6 +9,7 @@ class ChatProvider {
         this.fileOpsManager = fileOpsManager;
     }
     resolveWebviewView(webviewView, context, _token) {
+        console.log('🎯 Replit Chat webview is being resolved');
         this._view = webviewView;
         webviewView.webview.options = {
             enableScripts: true,
