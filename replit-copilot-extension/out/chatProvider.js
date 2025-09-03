@@ -624,14 +624,14 @@ class ChatProvider {
             display: flex;
             align-items: flex-end;
             gap: 8px;
-            position: relative;
+            width: 100%;
         }
 
         .chat-input {
             flex: 1;
             min-height: 32px;
             max-height: 120px;
-            padding: 8px 40px 8px 12px;
+            padding: 8px 12px;
             border: 1px solid var(--copilot-input-border);
             border-radius: 6px;
             background: var(--copilot-input-bg);
@@ -641,6 +641,7 @@ class ChatProvider {
             resize: none;
             outline: none;
             transition: border-color 0.2s;
+            line-height: 1.4;
         }
 
         .chat-input:focus {
@@ -652,20 +653,15 @@ class ChatProvider {
         }
 
         .send-button {
-            position: absolute;
-            right: 6px;
-            bottom: 6px;
-            width: 24px;
-            height: 24px;
-            border: none;
-            border-radius: 4px;
             background: var(--copilot-primary);
+            border: none;
             color: white;
             cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+            min-width: 60px;
             transition: background-color 0.2s;
         }
 
@@ -933,17 +929,6 @@ class ChatProvider {
             white-space: nowrap;
         }
 
-        .send-button {
-            background: var(--copilot-primary);
-            border: none;
-            color: white;
-            cursor: pointer;
-            padding: 6px 12px;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: 500;
-            transition: background-color 0.2s;
-        }
 
         /* Modal Styles */
         .modal-overlay {
@@ -1510,11 +1495,28 @@ class ChatProvider {
             }
 
             // UI action functions
-            function goBack() { /* Navigate back */ }
-            function openFork() { /* Open fork functionality */ }
-            function openEdit() { /* Open edit mode */ }
-            function openChat() { /* Focus on chat */ chatInput.focus(); }
-            function openTools() { /* Show tools panel */ }
+            function goBack() {
+                // Navigate back or refresh chat
+                location.reload();
+            }
+            function openFork() {
+                // Open VS Code command palette for Git actions
+                vscode.postMessage({ type: 'executeCommand', command: 'git.branchFrom' });
+            }
+            function openEdit() {
+                // Focus on currently open file
+                vscode.postMessage({ type: 'executeCommand', command: 'workbench.action.focusActiveEditorGroup' });
+            }
+            function openChat() {
+                // Focus on chat input and show chat
+                chatInput.focus();
+                const chatContainer = document.getElementById('chatContainer');
+                if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
+            function openTools() {
+                // Toggle settings panel
+                toggleSettings();
+            }
             function toggleMCP() {
                 const mcpList = document.getElementById('mcpServersList');
                 mcpList.style.display = mcpList.style.display === 'none' ? 'block' : 'none';
@@ -1621,7 +1623,7 @@ class ChatProvider {
                         break;
                     case 'error':
                         hideTypingIndicator();
-                        addMessage('❌ ' + message.message, false);
+                        addMessage('Error: ' + message.message, false);
                         break;
                     case 'settingsLoaded':
                         document.getElementById('modelSelect').value = message.settings.model || 'llama3.2:1b';
@@ -1636,7 +1638,7 @@ class ChatProvider {
                         addMessage(message.message, false);
                         break;
                     case 'fileOperationResult':
-                        addMessage('🔧 ' + message.operation + ': ' + JSON.stringify(message.result, null, 2), false);
+                        addMessage('[TOOL] ' + message.operation + ': ' + JSON.stringify(message.result, null, 2), false);
                         break;
                 }
             });
