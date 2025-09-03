@@ -10,7 +10,7 @@ let ollamaClient: OllamaClient;
 let fileOpsManager: FileOperationsManager;
 
 export function activate(context: vscode.ExtensionContext) {
-    console.log('🚀 Replit Copilot Extension is now active!');
+    console.log('🚀 Ollama Chat Extension is now active!');
     
     try {
         // Initialize services
@@ -25,12 +25,12 @@ export function activate(context: vscode.ExtensionContext) {
         context.subscriptions.push(disposable);
         console.log('✅ Webview provider registered successfully');
         
-        vscode.window.showInformationMessage('Replit Copilot Extension loaded successfully!');
+        vscode.window.showInformationMessage('Ollama Chat Extension loaded successfully!');
 
     // Register commands
     context.subscriptions.push(
         vscode.commands.registerCommand('replit-copilot.openChat', () => {
-            console.log('🎯 Opening Replit Chat...');
+            console.log('🎯 Opening Ollama Chat...');
             vscode.commands.executeCommand('workbench.view.explorer');
             vscode.commands.executeCommand('replitCopilotChat.focus');
         })
@@ -57,7 +57,7 @@ export function activate(context: vscode.ExtensionContext) {
         
     } catch (error) {
         console.error('❌ Extension activation failed:', error);
-        vscode.window.showErrorMessage(`Replit Copilot Extension failed to activate: ${error}`);
+        vscode.window.showErrorMessage(`Ollama Chat Extension failed to activate: ${error}`);
     }
 }
 

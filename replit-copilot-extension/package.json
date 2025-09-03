@@ -1,7 +1,7 @@
 {
   "name": "replit-copilot-extension",
-  "displayName": "Replit Copilot Extension",
-  "description": "A Copilot-like extension for Replit with MCP server and Ollama integration",
+  "displayName": "Ollama Chat Extension",
+  "description": "A chat extension with MCP server and Ollama integration",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.74.0"
@@ -17,20 +17,20 @@
     "commands": [
       {
         "command": "replit-copilot.openChat",
-        "title": "Open Replit Chat",
-        "category": "Replit"
+        "title": "Open Ollama Chat",
+        "category": "Ollama"
       },
       {
         "command": "replit-copilot.configure",
         "title": "Configure MCP & LLM Settings",
-        "category": "Replit"
+        "category": "Ollama"
       }
     ],
     "viewsContainers": {
       "activitybar": [
         {
           "id": "replit-copilot",
-          "title": "Replit Copilot",
+          "title": "Ollama Chat",
           "icon": "$(comment-discussion)"
         }
       ]
@@ -46,7 +46,7 @@
       ]
     },
     "configuration": {
-      "title": "Replit Copilot",
+      "title": "Ollama Chat",
       "properties": {
         "replitCopilot.mcpServerUrl": {
           "type": "string",

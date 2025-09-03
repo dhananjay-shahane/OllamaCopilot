@@ -20,7 +20,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         context: vscode.WebviewViewResolveContext,
         _token: vscode.CancellationToken,
     ) {
-        console.log('🎯 Replit Chat webview is being resolved');
+        console.log('🎯 Ollama Chat webview is being resolved');
         this._view = webviewView;
 
         webviewView.webview.options = {
@@ -152,7 +152,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Replit Copilot Chat</title>
+    <title>Ollama Chat</title>
     <style>
         :root {
             --copilot-primary: #0969da;
@@ -459,18 +459,18 @@ export class ChatProvider implements vscode.WebviewViewProvider {
 <body>
     <div class="chat-header">
         <div class="chat-title">
-            <div class="copilot-icon">R</div>
-            Replit Copilot
+            <div class="copilot-icon">O</div>
+            Ollama Chat
         </div>
-        <div class="chat-subtitle">AI assistant for your Replit projects</div>
+        <div class="chat-subtitle">AI assistant powered by Ollama</div>
     </div>
 
     <div class="chat-container" id="chatContainer">
         <div class="messages-wrapper" id="messagesWrapper">
             <div class="welcome-message">
-                <div class="welcome-title">👋 Welcome to Replit Copilot</div>
+                <div class="welcome-title">👋 Welcome to Ollama Chat</div>
                 <div class="welcome-subtitle">
-                    I can help you write code, debug issues, explain concepts, and work with your files.
+                    I can help you write code, debug issues, explain concepts, and work with your files using Ollama.
                     <br>Start by asking me a question or describing what you'd like to build.
                 </div>
             </div>
@@ -483,7 +483,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 <textarea 
                     id="chatInput" 
                     class="chat-input" 
-                    placeholder="Ask Replit Copilot..."
+                    placeholder="Ask Ollama Chat..."
                     rows="1"
                     maxlength="4000"
                 ></textarea>
@@ -528,7 +528,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                         <div class="message-avatar \${isUser ? 'user-avatar' : 'assistant-avatar'}">
                             \${isUser ? 'U' : 'R'}
                         </div>
-                        <span>\${isUser ? 'You' : 'Replit Copilot'}</span>
+                        <span>\${isUser ? 'You' : 'Ollama Chat'}</span>
                         \${timestamp ? \`<span style="color: var(--copilot-muted); font-weight: normal; margin-left: auto;">\${timestamp}</span>\` : ''}
                     </div>
                     <div class="message-content">\${content}</div>
@@ -548,7 +548,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 thinkingDiv.innerHTML = \`
                     <div class="thinking">
                         <div class="message-avatar assistant-avatar">R</div>
-                        <span>Replit Copilot is thinking</span>
+                        <span>Ollama Chat is thinking</span>
                         <div class="thinking-dots">
                             <div class="thinking-dot"></div>
                             <div class="thinking-dot"></div>
