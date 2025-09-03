@@ -57,6 +57,9 @@ class ChatProvider {
                 case 'executeFileOperation':
                     await this.handleFileOperation(message.operation, message.params);
                     break;
+                case 'executeCommand':
+                    await this.handleExecuteCommand(message.command);
+                    break;
                 case 'webviewTest':
                     console.log('[REPLIT-COPILOT] ✅ Webview communication test successful:', message.message);
                     break;
@@ -312,6 +315,24 @@ class ChatProvider {
             type: 'connectionTest',
             message: '📎 File attachment feature coming soon!'
         });
+    }
+    async handleExecuteCommand(command) {
+        try {
+            console.log('[REPLIT-COPILOT] Executing VS Code command:', command);
+            await vscode.commands.executeCommand(command);
+            this.postMessage({
+                type: 'commandExecuted',
+                command: command,
+                success: true
+            });
+        }
+        catch (error) {
+            console.error('[REPLIT-COPILOT] Failed to execute command:', command, error);
+            this.postMessage({
+                type: 'error',
+                message: `Failed to execute command: ${command}`
+            });
+        }
     }
     async handleFileOperation(operation, params) {
         try {

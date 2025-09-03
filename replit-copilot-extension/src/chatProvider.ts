@@ -71,6 +71,9 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                     case 'executeFileOperation':
                         await this.handleFileOperation(message.operation, message.params);
                         break;
+                    case 'executeCommand':
+                        await this.handleExecuteCommand(message.command);
+                        break;
                     case 'webviewTest':
                         console.log('[REPLIT-COPILOT] ✅ Webview communication test successful:', message.message);
                         break;
@@ -352,6 +355,24 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             type: 'connectionTest',
             message: '📎 File attachment feature coming soon!'
         });
+    }
+
+    private async handleExecuteCommand(command: string) {
+        try {
+            console.log('[REPLIT-COPILOT] Executing VS Code command:', command);
+            await vscode.commands.executeCommand(command);
+            this.postMessage({
+                type: 'commandExecuted',
+                command: command,
+                success: true
+            });
+        } catch (error) {
+            console.error('[REPLIT-COPILOT] Failed to execute command:', command, error);
+            this.postMessage({
+                type: 'error',
+                message: `Failed to execute command: ${command}`
+            });
+        }
     }
 
     private async handleFileOperation(operation: string, params: any) {
