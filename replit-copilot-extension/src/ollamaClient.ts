@@ -32,7 +32,7 @@ export class OllamaClient {
         if (this.conversationHistory.length === 0 || this.conversationHistory[0].role !== 'system') {
             this.conversationHistory.unshift({
                 role: 'system',
-                content: this.config.systemMessage!
+                content: this.config.systemMessage || this.getEnhancedSystemMessage()
             });
         }
     }
@@ -70,7 +70,7 @@ export class OllamaClient {
             const payload = {
                 model: this.config.model,
                 messages: includeContext ? this.conversationHistory : [
-                    { role: 'system', content: this.config.systemMessage },
+                    { role: 'system', content: this.config.systemMessage || this.getEnhancedSystemMessage() },
                     { role: 'user', content: message }
                 ],
                 stream: true, // Enable streaming for faster responses
@@ -176,7 +176,7 @@ export class OllamaClient {
         this.conversationHistory = [
             {
                 role: 'system',
-                content: this.config.systemMessage!
+                content: this.config.systemMessage || this.getEnhancedSystemMessage()
             }
         ];
     }
