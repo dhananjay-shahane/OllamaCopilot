@@ -78,7 +78,7 @@ class OllamaClient {
             // Keep conversation history manageable (last 20 messages)
             if (this.conversationHistory.length > 21) { // 1 system + 20 conversation messages
                 this.conversationHistory = [
-                    this.conversationHistory[0],
+                    this.conversationHistory[0], // Keep system message
                     ...this.conversationHistory.slice(-20) // Keep last 20 messages
                 ];
             }

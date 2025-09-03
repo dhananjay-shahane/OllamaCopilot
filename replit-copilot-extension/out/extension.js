@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deactivate = exports.activate = void 0;
+exports.activate = activate;
+exports.deactivate = deactivate;
 const vscode = require("vscode");
 const chatProvider_1 = require("./chatProvider");
 const mcpClient_1 = require("./mcpClient");
@@ -37,9 +38,7 @@ function activate(context) {
         }
     }));
 }
-exports.activate = activate;
 function deactivate() {
     mcpClient?.disconnect();
 }
-exports.deactivate = deactivate;
 //# sourceMappingURL=extension.js.map
