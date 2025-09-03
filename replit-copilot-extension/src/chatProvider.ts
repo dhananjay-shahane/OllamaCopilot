@@ -71,6 +71,9 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                     case 'executeFileOperation':
                         await this.handleFileOperation(message.operation, message.params);
                         break;
+                    case 'webviewTest':
+                        console.log('[REPLIT-COPILOT] ✅ Webview communication test successful:', message.message);
+                        break;
                 }
             },
             undefined,
@@ -493,8 +496,36 @@ export class ChatProvider implements vscode.WebviewViewProvider {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
     <title>Ollama Chat</title>
+    <script>
+        console.log('[WEBVIEW] SCRIPT TAG LOADED - JavaScript is working!');
+        
+        // Test VS Code API availability immediately
+        try {
+            const vscode = acquireVsCodeApi();
+            console.log('[WEBVIEW] VS Code API acquired successfully!');
+            
+            // Send test message to backend
+            vscode.postMessage({
+                type: 'webviewTest',
+                message: 'Webview JavaScript is working and can communicate!'
+            });
+            
+        } catch (error) {
+            console.error('[WEBVIEW] Failed to acquire VS Code API:', error);
+        }
+        
+        window.addEventListener('DOMContentLoaded', function() {
+            console.log('[WEBVIEW] DOM LOADED - Page is ready!');
+        });
+        window.addEventListener('load', function() {
+            console.log('[WEBVIEW] WINDOW LOADED - Everything is loaded!');
+        });
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('[WEBVIEW] DOCUMENT READY - DOM is ready!');
+        });
+    </script>
     <style>
         :root {
             --copilot-primary: #0969da;
