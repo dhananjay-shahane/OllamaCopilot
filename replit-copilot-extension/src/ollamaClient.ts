@@ -29,7 +29,7 @@ export class OllamaClient {
         };
 
         // Add system message to conversation history if not present
-        if (this.conversationHistory.length === 0 || this.conversationHistory[0].role !== 'system') {
+        if (this.conversationHistory.length === 0 || (this.conversationHistory[0] && this.conversationHistory[0].role !== 'system')) {
             this.conversationHistory.unshift({
                 role: 'system',
                 content: this.config.systemMessage || this.getEnhancedSystemMessage()
