@@ -70,8 +70,28 @@
         },
         "replitCopilot.mcpServerStdio": {
           "type": "object",
-          "default": {},
+          "default": {
+            "command": "node",
+            "args": ["-e", "console.log('MCP Ready'); process.stdin.pipe(process.stdout);"],
+            "timeout": 2000
+          },
           "description": "MCP Server STDIO configuration"
+        },
+        "replitCopilot.mcpConnectionType": {
+          "type": "string",
+          "enum": ["stdio", "http", "websocket"],
+          "default": "stdio",
+          "description": "MCP connection type (stdio is fastest)"
+        },
+        "replitCopilot.enableStreaming": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable ChatGPT-style streaming responses"
+        },
+        "replitCopilot.enableFastMode": {
+          "type": "boolean", 
+          "default": true,
+          "description": "Enable fast mode with reduced timeouts"
         }
       }
     }

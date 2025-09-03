@@ -1214,6 +1214,59 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 opacity: 1;
             }
         }
+
+        /* ChatGPT-style typing cursor */
+        .typing-cursor {
+            color: var(--copilot-primary);
+            animation: cursorBlink 1s infinite;
+            font-weight: normal;
+        }
+
+        @keyframes cursorBlink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+
+        /* Streaming message effects */
+        .streaming-message {
+            animation: messageSlideIn 0.3s ease-out;
+        }
+
+        @keyframes messageSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Fast mode indicator */
+        .fast-mode-indicator {
+            color: var(--copilot-primary);
+            font-size: 10px;
+            margin-left: 4px;
+            opacity: 0.7;
+        }
+
+        /* Settings improvements */
+        .settings-section {
+            border: 1px solid var(--copilot-border);
+            border-radius: 6px;
+            padding: 12px;
+            background: var(--copilot-input-bg);
+        }
+
+        .settings-section + .settings-section {
+            margin-top: 12px;
+        }
+
+        .settings-input[type="checkbox"] {
+            width: auto;
+            margin-right: 8px;
+        }
     </style>
 </head>
 <body>
@@ -1249,7 +1302,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             <label class="settings-label">
                 Model:
                 <select id="modelSelect" class="model-select">
-                    <option value="llama3.2:1b">Llama-3.2:1b</option>
+                    <option value="llama3.2:1b">Llama-3.2:1b (Fast)</option>
                     <option value="llama3.2:3b">Llama-3.2:3b</option>
                     <option value="llama3.2">Llama-3.2</option>
                     <option value="llama3.1">Llama-3.1</option>
@@ -1257,22 +1310,58 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 </select>
             </label>
         </div>
+        
         <div class="settings-section">
+            <label class="settings-label">
+                MCP Connection Type:
+                <select id="mcpConnectionType" class="model-select" onchange="updateMcpSettings()">
+                    <option value="stdio">STDIO (Fastest - Recommended)</option>
+                    <option value="http">HTTP Server</option>
+                    <option value="websocket">WebSocket</option>
+                </select>
+            </label>
+        </div>
+
+        <div class="settings-section" id="mcpStdioSection">
+            <label class="settings-label">
+                STDIO Command:
+                <input type="text" id="mcpStdioCommand" class="settings-input" value="node" placeholder="node, python, etc." />
+            </label>
+            <label class="settings-label">
+                STDIO Args (JSON array):
+                <textarea id="mcpStdioArgs" class="settings-input" rows="2" placeholder='["-e", "console.log(\\"MCP Ready\\"); process.stdin.pipe(process.stdout);"]'>[\"-e\", \"console.log('MCP Ready'); process.stdin.pipe(process.stdout);\"]</textarea>
+            </label>
+            <label class="settings-label">
+                Response Timeout (ms):
+                <input type="number" id="mcpTimeout" class="settings-input" value="2000" min="1000" max="10000" />
+            </label>
+        </div>
+
+        <div class="settings-section" id="mcpServerSection" style="display: none;">
             <label class="settings-label">
                 MCP Server URL:
                 <input type="text" id="mcpServerUrl" class="settings-input" placeholder="ws://localhost:8080 or http://localhost:8080" />
             </label>
-        </div>
-        <div class="settings-section">
             <label class="settings-label">
                 MCP API Key (optional):
                 <input type="password" id="mcpApiKey" class="settings-input" placeholder="Enter API key..." />
             </label>
         </div>
+
+        <div class="settings-section">
+            <label class="settings-label">
+                <input type="checkbox" id="enableStreaming" checked> Enable ChatGPT-style streaming responses
+            </label>
+            <label class="settings-label">
+                <input type="checkbox" id="enableFastMode" checked> Fast mode (reduced timeouts)
+            </label>
+        </div>
+
         <div class="settings-actions">
-            <button class="action-button" onclick="saveSettings()">Save</button>
-            <button class="action-button secondary" onclick="testConnection()">Test Connection</button>
+            <button class="action-button" onclick="saveSettings()">💾 Save Settings</button>
+            <button class="action-button secondary" onclick="testConnection()">🔍 Test Connection</button>
             <button class="action-button secondary" onclick="refreshModels()">↻ Refresh Models</button>
+            <button class="action-button secondary" onclick="resetToDefaults()">🔄 Reset Defaults</button>
         </div>
     </div>
 
@@ -1512,15 +1601,34 @@ export class ChatProvider implements vscode.WebviewViewProvider {
 
             function saveSettings() {
                 const modelSelect = document.getElementById('modelSelect');
+                const mcpConnectionType = document.getElementById('mcpConnectionType');
+                const mcpStdioCommand = document.getElementById('mcpStdioCommand');
+                const mcpStdioArgs = document.getElementById('mcpStdioArgs');
+                const mcpTimeout = document.getElementById('mcpTimeout');
                 const mcpServerUrl = document.getElementById('mcpServerUrl');
                 const mcpApiKey = document.getElementById('mcpApiKey');
+                const enableStreaming = document.getElementById('enableStreaming');
+                const enableFastMode = document.getElementById('enableFastMode');
+
+                let stdioArgs = [];
+                try {
+                    stdioArgs = JSON.parse(mcpStdioArgs.value || '[]');
+                } catch (e) {
+                    stdioArgs = ['-e', 'console.log("MCP Ready"); process.stdin.pipe(process.stdout);'];
+                }
 
                 vscode.postMessage({
                     type: 'saveSettings',
                     settings: {
                         model: modelSelect.value,
+                        mcpConnectionType: mcpConnectionType.value,
+                        mcpStdioCommand: mcpStdioCommand.value,
+                        mcpStdioArgs: stdioArgs,
+                        mcpTimeout: parseInt(mcpTimeout.value) || 2000,
                         mcpServerUrl: mcpServerUrl.value,
-                        mcpApiKey: mcpApiKey.value
+                        mcpApiKey: mcpApiKey.value,
+                        enableStreaming: enableStreaming.checked,
+                        enableFastMode: enableFastMode.checked
                     }
                 });
 
@@ -1586,17 +1694,41 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                     currentStreamingMessage.className = 'message assistant-message streaming-message';
                     currentStreamingMessage.innerHTML = \`
                         <div class="message-header">
-                            <div class="message-avatar assistant-avatar">O</div>
-                            <span>Ollama Chat</span>
+                            <div class="message-avatar assistant-avatar">R</div>
+                            <span>Replit Copilot</span>
                         </div>
-                        <div class="message-content"></div>
+                        <div class="message-content"><span class="typing-cursor">▋</span></div>
                     \`;
                     messagesWrapper.appendChild(currentStreamingMessage);
                 }
 
-                // Update content with typing effect
+                // Update content with ChatGPT-style typing effect
                 const contentDiv = currentStreamingMessage.querySelector('.message-content');
-                contentDiv.textContent = fullMessage;
+                
+                // Add character-by-character animation for fast streaming
+                if (token && token.length > 0) {
+                    const currentText = contentDiv.textContent.replace('▋', '');
+                    const newText = currentText + token;
+                    
+                    // Simulate typing by adding one character at a time with delay
+                    let charIndex = currentText.length;
+                    const typeNextChar = () => {
+                        if (charIndex < newText.length) {
+                            contentDiv.innerHTML = newText.substring(0, charIndex + 1) + '<span class="typing-cursor">▋</span>';
+                            charIndex++;
+                            if (document.getElementById('enableStreaming')?.checked) {
+                                setTimeout(typeNextChar, 15); // 15ms delay between characters for smooth typing
+                            } else {
+                                contentDiv.innerHTML = newText + '<span class="typing-cursor">▋</span>';
+                            }
+                        }
+                    };
+                    typeNextChar();
+                } else {
+                    // Fallback to immediate update
+                    contentDiv.innerHTML = fullMessage + '<span class="typing-cursor">▋</span>';
+                }
+                
                 scrollToBottom();
             }
 
@@ -1716,12 +1848,41 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 });
             });
 
+            function updateMcpSettings() {
+                const connectionType = document.getElementById('mcpConnectionType').value;
+                const stdioSection = document.getElementById('mcpStdioSection');
+                const serverSection = document.getElementById('mcpServerSection');
+                
+                if (connectionType === 'stdio') {
+                    stdioSection.style.display = 'block';
+                    serverSection.style.display = 'none';
+                } else {
+                    stdioSection.style.display = 'none';
+                    serverSection.style.display = 'block';
+                }
+            }
+
+            function resetToDefaults() {
+                document.getElementById('modelSelect').value = 'llama3.2:1b';
+                document.getElementById('mcpConnectionType').value = 'stdio';
+                document.getElementById('mcpStdioCommand').value = 'node';
+                document.getElementById('mcpStdioArgs').value = '[\"-e\", \"console.log(\'MCP Ready\'); process.stdin.pipe(process.stdout);\"]';
+                document.getElementById('mcpTimeout').value = '2000';
+                document.getElementById('mcpServerUrl').value = '';
+                document.getElementById('mcpApiKey').value = '';
+                document.getElementById('enableStreaming').checked = true;
+                document.getElementById('enableFastMode').checked = true;
+                updateMcpSettings();
+            }
+
             // Make functions global
             window.insertSuggestion = insertSuggestion;
             window.toggleSettings = toggleSettings;
             window.saveSettings = saveSettings;
             window.testConnection = testConnection;
             window.refreshModels = refreshModels;
+            window.updateMcpSettings = updateMcpSettings;
+            window.resetToDefaults = resetToDefaults;
             window.attachFile = attachFile;
             window.showMCPModal = showMCPModal;
             window.closeMCPModal = closeMCPModal;
