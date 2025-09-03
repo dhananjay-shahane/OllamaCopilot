@@ -27,17 +27,11 @@ class ChatProvider {
                     console.log('[REPLIT-COPILOT] Handling chat message:', message.text);
                     await this.handleChatMessage(message.text);
                     break;
-                case 'applyEdit':
-                    await this.handleApplyEdit(message.edit);
-                    break;
-                case 'previewFile':
-                    await this.handlePreviewFile(message.filePath);
+                case 'saveSettings':
+                    await this.handleSaveSettings(message.settings);
                     break;
                 case 'getSettings':
                     await this.handleGetSettings();
-                    break;
-                case 'saveSettings':
-                    await this.handleSaveSettings(message.settings);
                     break;
                 case 'testConnection':
                     await this.handleTestConnection();
@@ -45,87 +39,39 @@ class ChatProvider {
                 case 'refreshModels':
                     await this.handleRefreshModels();
                     break;
-                case 'changeModel':
-                    await this.handleChangeModel(message.model);
-                    break;
-                case 'addMCPServer':
-                    await this.handleAddMCPServer(message.config);
-                    break;
-                case 'attachFile':
-                    await this.handleAttachFile();
-                    break;
-                case 'executeFileOperation':
-                    await this.handleFileOperation(message.operation, message.params);
-                    break;
-                case 'executeCommand':
-                    await this.handleExecuteCommand(message.command);
-                    break;
-                case 'webviewTest':
-                    console.log('[REPLIT-COPILOT] ✅ Webview communication test successful:', message.message);
-                    break;
             }
-        }, undefined);
+        }, undefined, []);
     }
     async handleChatMessage(message) {
         console.log('[REPLIT-COPILOT] Processing chat message:', message);
         try {
-            // Add user message to chat and show typing indicator
-            console.log('[REPLIT-COPILOT] Sending userMessage and startTyping to webview');
+            // Add user message to chat immediately
             this.postMessage({
                 type: 'userMessage',
                 message: message
             });
-            // Analyze if the message contains file operation requests
-            const fileOperations = await this.parseFileOperationRequests(message);
-            let contextInfo = '';
-            // If user mentions specific files or operations, provide context
-            if (this.containsFileReferences(message)) {
-                try {
-                    const currentFile = await this.fileOpsManager.readCurrentlyOpenFile();
-                    if (currentFile) {
-                        contextInfo = `\n\nCURRENT CONTEXT:\n- Active file: ${currentFile.path}\n- File content preview: ${currentFile.content.slice(0, 500)}...`;
-                    }
-                }
-                catch (e) {
-                    // Continue without context if there's an error
-                }
-            }
-            // Get streaming response from Ollama with context
+            // Start typing indicator with faster response
+            this.postMessage({ type: 'startTyping' });
+            // Get streaming response from Ollama with fast mode
             let fullResponse = '';
-            const enhancedMessage = message + contextInfo;
-            const response = await this.ollamaClient.chat(enhancedMessage, (token) => {
+            const startTime = Date.now();
+            const response = await this.ollamaClient.chat(message, (token) => {
                 fullResponse += token;
+                // Send streaming tokens with ChatGPT-style effect
                 this.postMessage({
                     type: 'streamToken',
                     token: token,
                     fullMessage: fullResponse
                 });
             });
-            // Execute any file operations suggested by the AI
-            if (fileOperations.length > 0) {
-                for (const operation of fileOperations) {
-                    try {
-                        await this.executeFileOperation(operation);
-                    }
-                    catch (error) {
-                        console.error('File operation error:', error);
-                    }
-                }
-            }
+            const responseTime = Date.now() - startTime;
+            console.log(`[REPLIT-COPILOT] Response time: ${responseTime}ms`);
             // Final complete message
             this.postMessage({
                 type: 'assistantMessage',
                 message: response,
                 formatted: this.formatMessage(response)
             });
-            // Check if response suggests file operations
-            if (response.includes('file:') || response.includes('edit:')) {
-                const suggestions = await this.generateFileSuggestions(response);
-                this.postMessage({
-                    type: 'fileSuggestions',
-                    suggestions: suggestions
-                });
-            }
         }
         catch (error) {
             this.postMessage({
@@ -134,17 +80,82 @@ class ChatProvider {
             });
         }
     }
+    async handleSaveSettings(settings) {
+        try {
+            const config = vscode.workspace.getConfiguration("replitCopilot");
+            await config.update("defaultModel", settings.model, vscode.ConfigurationTarget.Global);
+            await config.update("mcpServerUrl", settings.mcpServerUrl, vscode.ConfigurationTarget.Global);
+            await config.update("mcpApiKey", settings.mcpApiKey, vscode.ConfigurationTarget.Global);
+            await config.update("mcpConnectionType", settings.mcpConnectionType || "stdio", vscode.ConfigurationTarget.Global);
+            await config.update("mcpStdioCommand", settings.mcpStdioCommand || "node", vscode.ConfigurationTarget.Global);
+            await config.update("mcpStdioArgs", settings.mcpStdioArgs || [], vscode.ConfigurationTarget.Global);
+            await config.update("mcpTimeout", settings.mcpTimeout || 2000, vscode.ConfigurationTarget.Global);
+            await config.update("enableStreaming", settings.enableStreaming !== false, vscode.ConfigurationTarget.Global);
+            await config.update("enableFastMode", settings.enableFastMode !== false, vscode.ConfigurationTarget.Global);
+            this.ollamaClient?.updateConfiguration?.();
+            this.mcpClient?.updateConfiguration?.();
+            this.postMessage({ type: "settingsSaved", message: "⚡ Settings saved! Fast mode enabled." });
+        }
+        catch (error) {
+            this.postMessage({ type: "error", message: `Failed to save settings: ${error}` });
+        }
+    }
+    async handleGetSettings() {
+        const config = vscode.workspace.getConfiguration("replitCopilot");
+        this.postMessage({
+            type: "settingsLoaded",
+            settings: {
+                model: config.get("defaultModel") || "llama3.2:1b",
+                mcpServerUrl: config.get("mcpServerUrl") || "",
+                mcpApiKey: config.get("mcpApiKey") || "",
+                mcpConnectionType: config.get("mcpConnectionType") || "stdio",
+                mcpStdioCommand: config.get("mcpStdioCommand") || "node",
+                mcpStdioArgs: config.get("mcpStdioArgs") || ['-e', 'console.log("MCP Ready"); process.stdin.pipe(process.stdout);'],
+                mcpTimeout: config.get("mcpTimeout") || 2000,
+                enableStreaming: config.get("enableStreaming") !== false,
+                enableFastMode: config.get("enableFastMode") !== false
+            },
+        });
+    }
+    async handleTestConnection() {
+        try {
+            const ollamaAvailable = await this.ollamaClient.isAvailable();
+            const mcpConnected = await this.mcpClient.connect();
+            let message = "🔍 Connection Test Results:\n\n";
+            message += `🤖 Ollama: ${ollamaAvailable ? "✅ Connected" : "❌ Not available"}\n`;
+            message += `🔗 MCP Server: ${mcpConnected ? "✅ Connected (STDIO)" : "❌ Not connected"}\n`;
+            message += `⚡ Fast Mode: ${vscode.workspace.getConfiguration("replitCopilot").get("enableFastMode") ? "✅ Enabled" : "❌ Disabled"}`;
+            this.postMessage({ type: "connectionTest", message });
+        }
+        catch (error) {
+            this.postMessage({ type: "error", message: `Connection test failed: ${error}` });
+        }
+    }
+    async handleRefreshModels() {
+        try {
+            const models = await this.ollamaClient.getModels();
+            this.postMessage({
+                type: "modelsRefreshed",
+                models: models.length > 0
+                    ? models
+                    : ["llama3.2:1b", "llama3.2:3b", "llama3.2", "llama3.1", "codellama"],
+            });
+        }
+        catch (error) {
+            this.postMessage({ type: "error", message: `Failed to refresh models: ${error}` });
+        }
+    }
     formatMessage(message) {
         // Format code blocks
         let formatted = message.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, language, code) => {
-            return `<pre class="code-block"><code class="language-${language || 'text'}">${this.escapeHtml(code.trim())}</code></pre>`;
+            return `<pre class="bg-gray-800 text-green-400 p-3 rounded-lg overflow-x-auto"><code class="language-${language || 'text'}">${this.escapeHtml(code.trim())}</code></pre>`;
         });
         // Format inline code
-        formatted = formatted.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
+        formatted = formatted.replace(/`([^`]+)`/g, '<code class="bg-gray-200 px-1 rounded text-sm">$1</code>');
         // Format bold text
-        formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold">$1</strong>');
         // Format italic text
-        formatted = formatted.replace(/\*(.*?)\*/g, '<em>$1</em>');
+        formatted = formatted.replace(/\*(.*?)\*/g, '<em class="italic">$1</em>');
         // Convert line breaks
         formatted = formatted.replace(/\n/g, '<br>');
         return formatted;
@@ -154,305 +165,9 @@ class ChatProvider {
         div.textContent = text;
         return div.innerHTML;
     }
-    async handleApplyEdit(edit) {
-        try {
-            await this.fileOpsManager.applyEdit(edit);
-            this.postMessage({
-                type: 'editApplied',
-                message: 'Edit applied successfully'
-            });
-        }
-        catch (error) {
-            this.postMessage({
-                type: 'error',
-                message: `Failed to apply edit: ${error}`
-            });
-        }
-    }
-    async handlePreviewFile(filePath) {
-        try {
-            const content = await this.fileOpsManager.readFile(filePath);
-            this.postMessage({
-                type: 'filePreview',
-                filePath: filePath,
-                content: content
-            });
-        }
-        catch (error) {
-            this.postMessage({
-                type: 'error',
-                message: `Failed to preview file: ${error}`
-            });
-        }
-    }
-    async generateFileSuggestions(response) {
-        // Parse response for file operation suggestions
-        const suggestions = [];
-        // Simple pattern matching for now - can be enhanced with better parsing
-        if (response.includes('create file')) {
-            suggestions.push({
-                type: 'create',
-                description: 'Create new file',
-                action: 'createFile'
-            });
-        }
-        if (response.includes('edit file') || response.includes('modify file')) {
-            suggestions.push({
-                type: 'edit',
-                description: 'Edit existing file',
-                action: 'editFile'
-            });
-        }
-        return suggestions;
-    }
-    async handleGetSettings() {
-        const config = vscode.workspace.getConfiguration('replitCopilot');
-        this.postMessage({
-            type: 'settingsLoaded',
-            settings: {
-                model: config.get('defaultModel') || 'llama3.2:1b',
-                mcpServerUrl: config.get('mcpServerUrl') || '',
-                mcpApiKey: config.get('mcpApiKey') || ''
-            }
-        });
-    }
-    async handleSaveSettings(settings) {
-        try {
-            const config = vscode.workspace.getConfiguration('replitCopilot');
-            await config.update('defaultModel', settings.model, vscode.ConfigurationTarget.Global);
-            await config.update('mcpServerUrl', settings.mcpServerUrl, vscode.ConfigurationTarget.Global);
-            await config.update('mcpApiKey', settings.mcpApiKey, vscode.ConfigurationTarget.Global);
-            // Update clients with new configuration
-            this.ollamaClient.updateConfiguration();
-            this.mcpClient.updateConfiguration();
-        }
-        catch (error) {
-            this.postMessage({
-                type: 'error',
-                message: `Failed to save settings: ${error}`
-            });
-        }
-    }
-    async handleTestConnection() {
-        try {
-            const ollamaAvailable = await this.ollamaClient.isAvailable();
-            const mcpConnected = await this.mcpClient.connect();
-            let message = '🔍 Connection Test Results:\n\n';
-            message += `🤖 Ollama: ${ollamaAvailable ? '✅ Connected' : '❌ Not available'}\n`;
-            message += `🔗 MCP Server: ${mcpConnected ? '✅ Connected' : '❌ Not connected'}`;
-            this.postMessage({
-                type: 'connectionTest',
-                message: message
-            });
-        }
-        catch (error) {
-            this.postMessage({
-                type: 'error',
-                message: `Connection test failed: ${error}`
-            });
-        }
-    }
-    async handleRefreshModels() {
-        try {
-            const models = await this.ollamaClient.getModels();
-            this.postMessage({
-                type: 'modelsRefreshed',
-                models: models.length > 0 ? models : ['llama3.2:1b', 'llama3.2:3b', 'llama3.2', 'llama3.1', 'codellama']
-            });
-        }
-        catch (error) {
-            this.postMessage({
-                type: 'error',
-                message: `Failed to refresh models: ${error}`
-            });
-        }
-    }
-    async handleChangeModel(model) {
-        try {
-            const config = vscode.workspace.getConfiguration('replitCopilot');
-            await config.update('defaultModel', model, vscode.ConfigurationTarget.Global);
-            this.ollamaClient.updateConfiguration();
-        }
-        catch (error) {
-            this.postMessage({
-                type: 'error',
-                message: `Failed to change model: ${error}`
-            });
-        }
-    }
-    async handleAddMCPServer(config) {
-        try {
-            // For now, just update the configuration with the MCP server details
-            // In a full implementation, you'd save this to a configuration file
-            const serverConfig = vscode.workspace.getConfiguration('replitCopilot');
-            if (config.type === 'stdio') {
-                await serverConfig.update('mcpServerStdio', config, vscode.ConfigurationTarget.Global);
-            }
-            else {
-                await serverConfig.update('mcpServerUrl', config.url, vscode.ConfigurationTarget.Global);
-                await serverConfig.update('mcpApiKey', config.apiKey, vscode.ConfigurationTarget.Global);
-            }
-            this.mcpClient.updateConfiguration();
-            this.postMessage({
-                type: 'connectionTest',
-                message: `✅ MCP Server "${config.name}" added successfully!`
-            });
-        }
-        catch (error) {
-            this.postMessage({
-                type: 'error',
-                message: `Failed to add MCP server: ${error}`
-            });
-        }
-    }
-    async handleAttachFile() {
-        // This would integrate with VS Code's file picker
-        // For now, just show a message
-        this.postMessage({
-            type: 'connectionTest',
-            message: '📎 File attachment feature coming soon!'
-        });
-    }
-    async handleExecuteCommand(command) {
-        try {
-            console.log('[REPLIT-COPILOT] Executing VS Code command:', command);
-            await vscode.commands.executeCommand(command);
-            this.postMessage({
-                type: 'commandExecuted',
-                command: command,
-                success: true
-            });
-        }
-        catch (error) {
-            console.error('[REPLIT-COPILOT] Failed to execute command:', command, error);
-            this.postMessage({
-                type: 'error',
-                message: `Failed to execute command: ${command}`
-            });
-        }
-    }
-    async handleFileOperation(operation, params) {
-        try {
-            let result;
-            switch (operation) {
-                case 'read_file':
-                    result = await this.fileOpsManager.readFile(params.path);
-                    break;
-                case 'create_new_file':
-                    await this.fileOpsManager.writeFile(params.path, params.content || '');
-                    result = `File created: ${params.path}`;
-                    break;
-                case 'edit_existing_file':
-                    await this.fileOpsManager.updateFileRange(params.path, params.range, params.content);
-                    result = `File edited: ${params.path}`;
-                    break;
-                case 'search_and_replace_in_file':
-                    result = await this.fileOpsManager.searchAndReplaceInFile(params.path, params.search, params.replace);
-                    break;
-                case 'ls':
-                    result = await this.fileOpsManager.listFiles(params.path);
-                    break;
-                case 'file_glob_search':
-                    result = await this.fileOpsManager.fileGlobSearch(params.pattern);
-                    break;
-                case 'grep_search':
-                    result = await this.fileOpsManager.grepSearch(params.term, params.pattern);
-                    break;
-                case 'run_terminal_command':
-                    result = await this.fileOpsManager.runTerminalCommand(params.command, params.cwd);
-                    break;
-                case 'view_diff':
-                    result = await this.fileOpsManager.viewDiff(params.file1, params.file2);
-                    break;
-                case 'view_repo_map':
-                    result = await this.fileOpsManager.viewRepoMap();
-                    break;
-                case 'view_subdirectory':
-                    result = await this.fileOpsManager.viewSubdirectory(params.path);
-                    break;
-                case 'read_currently_open_file':
-                    result = await this.fileOpsManager.readCurrentlyOpenFile();
-                    break;
-                case 'fetch_url_content':
-                    result = await this.fileOpsManager.fetchUrlContent(params.url);
-                    break;
-                case 'create_rule_block':
-                    result = await this.fileOpsManager.createRuleBlock(params.type, params.content);
-                    break;
-                default:
-                    throw new Error(`Unknown file operation: ${operation}`);
-            }
-            this.postMessage({
-                type: 'fileOperationResult',
-                operation,
-                result
-            });
-        }
-        catch (error) {
-            this.postMessage({
-                type: 'error',
-                message: `File operation failed (${operation}): ${error}`
-            });
-        }
-    }
-    async parseFileOperationRequests(message) {
-        // Simple parsing for common file operation patterns
-        const operations = [];
-        // Look for explicit operation requests
-        const patterns = [
-            { regex: /create file (\S+)/i, op: 'create_new_file' },
-            { regex: /read file (\S+)/i, op: 'read_file' },
-            { regex: /edit file (\S+)/i, op: 'edit_existing_file' },
-            { regex: /search for "([^"]+)"/i, op: 'grep_search' },
-            { regex: /list files in (\S+)/i, op: 'ls' },
-            { regex: /run command (.+)/i, op: 'run_terminal_command' }
-        ];
-        for (const pattern of patterns) {
-            const match = message.match(pattern.regex);
-            if (match) {
-                operations.push({
-                    operation: pattern.op,
-                    params: this.extractParamsFromMatch(pattern.op, match)
-                });
-            }
-        }
-        return operations;
-    }
-    containsFileReferences(message) {
-        // Check if message contains file-related keywords
-        const fileKeywords = [
-            'file', 'folder', 'directory', 'path', 'code', 'script',
-            'create', 'edit', 'read', 'write', 'delete', 'search',
-            'current file', 'this file', 'project', 'workspace'
-        ];
-        return fileKeywords.some(keyword => message.toLowerCase().includes(keyword.toLowerCase()));
-    }
-    async executeFileOperation(operation) {
-        return await this.handleFileOperation(operation.operation, operation.params);
-    }
-    extractParamsFromMatch(operation, match) {
-        switch (operation) {
-            case 'create_new_file':
-            case 'read_file':
-            case 'edit_existing_file':
-                return { path: match[1] };
-            case 'grep_search':
-                return { term: match[1], pattern: '**/*' };
-            case 'ls':
-                return { path: match[1] };
-            case 'run_terminal_command':
-                return { command: match[1] };
-            default:
-                return {};
-        }
-    }
     postMessage(message) {
-        console.log('[REPLIT-COPILOT] Sending message to webview:', message);
         if (this._view) {
             this._view.webview.postMessage(message);
-        }
-        else {
-            console.error('[REPLIT-COPILOT] No webview available to send message to');
         }
     }
     _getHtmlForWebview(webview) {
@@ -461,726 +176,43 @@ class ChatProvider {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
-    <title>Ollama Chat</title>
+    <title>Replit Copilot Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <script>
-        console.log('[WEBVIEW] SCRIPT TAG LOADED - JavaScript is working!');
-        
-        // Test VS Code API availability immediately
-        try {
-            const vscode = acquireVsCodeApi();
-            console.log('[WEBVIEW] VS Code API acquired successfully!');
-            
-            // Send test message to backend
-            vscode.postMessage({
-                type: 'webviewTest',
-                message: 'Webview JavaScript is working and can communicate!'
-            });
-            
-        } catch (error) {
-            console.error('[WEBVIEW] Failed to acquire VS Code API:', error);
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'vscode-bg': 'var(--vscode-sideBar-background)',
+                        'vscode-text': 'var(--vscode-foreground)',
+                        'vscode-border': 'var(--vscode-panel-border)',
+                        'vscode-input': 'var(--vscode-input-background)',
+                        'vscode-button': 'var(--vscode-button-background)',
+                    }
+                }
+            }
         }
-        
-        window.addEventListener('DOMContentLoaded', function() {
-            console.log('[WEBVIEW] DOM LOADED - Page is ready!');
-        });
-        window.addEventListener('load', function() {
-            console.log('[WEBVIEW] WINDOW LOADED - Everything is loaded!');
-        });
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('[WEBVIEW] DOCUMENT READY - DOM is ready!');
-        });
     </script>
     <style>
         :root {
             --copilot-primary: #0969da;
             --copilot-primary-hover: #0860ca;
-            --copilot-border: var(--vscode-panel-border);
-            --copilot-bg: var(--vscode-sideBar-background);
-            --copilot-text: var(--vscode-foreground);
-            --copilot-muted: var(--vscode-descriptionForeground);
-            --copilot-input-bg: var(--vscode-input-background);
-            --copilot-input-border: var(--vscode-input-border);
-            --copilot-message-user: var(--vscode-textBlockQuote-background);
-            --copilot-message-assistant: transparent;
         }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
-            height: 100vh;
-            background: var(--copilot-bg);
-            color: var(--copilot-text);
-            display: flex;
-            flex-direction: column;
-            font-size: 13px;
-            line-height: 1.4;
-        }
-
-        .chat-header {
-            padding: 12px 16px;
-            border-bottom: 1px solid var(--copilot-border);
-            background: var(--copilot-bg);
-            flex-shrink: 0;
-        }
-
-        .chat-title {
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--copilot-text);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .chat-subtitle {
-            font-size: 11px;
-            color: var(--copilot-muted);
-            margin-top: 2px;
-        }
-
-        .copilot-icon {
-            width: 16px;
-            height: 16px;
-            background: linear-gradient(135deg, #0969da, #0860ca);
-            border-radius: 3px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 10px;
-            font-weight: bold;
-        }
-
-        .chat-container {
-            flex: 1;
-            overflow-y: auto;
-            padding: 0;
-            display: flex;
-            flex-direction: column;
-            scroll-behavior: smooth;
-        }
-
-        .messages-wrapper {
-            padding: 12px 0;
-            min-height: 100%;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-
-        .message {
-            padding: 0 16px;
-            animation: fadeIn 0.3s ease-in;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .message-content {
-            padding: 12px 16px;
-            border-radius: 8px;
-            line-height: 1.5;
-            word-wrap: break-word;
-            font-size: 13px;
-            position: relative;
-        }
-
-        .user-message .message-content {
-            background: var(--copilot-message-user);
-            margin-left: 40px;
-            border: 1px solid var(--copilot-input-border);
-        }
-
-        .assistant-message .message-content {
-            background: var(--copilot-message-assistant);
-        }
-
-        .message-header {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 8px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        .message-avatar {
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 11px;
-            flex-shrink: 0;
-        }
-
-        .user-avatar {
-            background: var(--vscode-button-background);
-            color: var(--vscode-button-foreground);
-        }
-
-        .assistant-avatar {
-            background: linear-gradient(135deg, #0969da, #0860ca);
-            color: white;
-        }
-
-        .thinking {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 12px 16px;
-            color: var(--copilot-muted);
-            font-size: 12px;
-            font-style: italic;
-        }
-
-        .thinking-dots {
-            display: flex;
-            gap: 2px;
-        }
-
-        .thinking-dot {
-            width: 4px;
-            height: 4px;
-            background: var(--copilot-muted);
-            border-radius: 50%;
-            animation: pulse 1.5s infinite;
-        }
-
-        .thinking-dot:nth-child(2) { animation-delay: 0.2s; }
-        .thinking-dot:nth-child(3) { animation-delay: 0.4s; }
-
-        @keyframes pulse {
-            0%, 80%, 100% { opacity: 0.3; }
-            40% { opacity: 1; }
-        }
-
-        .input-area {
-            flex-shrink: 0;
-            border-top: 1px solid var(--copilot-border);
-            background: var(--copilot-bg);
-        }
-
-        .input-container {
-            padding: 12px 16px 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .input-wrapper {
-            display: flex;
-            align-items: flex-end;
-            gap: 8px;
-            width: 100%;
-        }
-
-        .chat-input {
-            flex: 1;
-            min-height: 32px;
-            max-height: 120px;
-            padding: 8px 12px;
-            border: 1px solid var(--copilot-input-border);
-            border-radius: 6px;
-            background: var(--copilot-input-bg);
-            color: var(--copilot-text);
-            font-size: 13px;
-            font-family: inherit;
-            resize: none;
-            outline: none;
-            transition: border-color 0.2s;
-            line-height: 1.4;
-        }
-
-        .chat-input:focus {
-            border-color: var(--copilot-primary);
-        }
-
-        .chat-input::placeholder {
-            color: var(--copilot-muted);
-        }
-
-        .send-button {
-            background: var(--copilot-primary);
-            border: none;
-            color: white;
-            cursor: pointer;
-            padding: 8px 12px;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: 500;
-            min-width: 60px;
-            transition: background-color 0.2s;
-        }
-
-        .send-button:hover:not(:disabled) {
-            background: var(--copilot-primary-hover);
-        }
-
-        .send-button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .suggestions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-top: 8px;
-        }
-
-        .suggestion {
-            padding: 6px 12px;
-            border: 1px solid var(--copilot-border);
-            border-radius: 16px;
-            background: transparent;
-            color: var(--copilot-text);
-            font-size: 12px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .suggestion:hover {
-            background: var(--copilot-input-bg);
-            border-color: var(--copilot-primary);
-        }
-
-        .welcome-message {
-            text-align: center;
-            padding: 32px 16px;
-            color: var(--copilot-muted);
-        }
-
-        .welcome-title {
-            font-size: 16px;
-            font-weight: 600;
-            color: var(--copilot-text);
-            margin-bottom: 8px;
-        }
-
-        .welcome-subtitle {
-            font-size: 13px;
-            line-height: 1.4;
-        }
-
-        .chat-container::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        .chat-container::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        .chat-container::-webkit-scrollbar-thumb {
-            background: var(--vscode-scrollbarSlider-background);
-            border-radius: 4px;
-        }
-
-        .chat-container::-webkit-scrollbar-thumb:hover {
-            background: var(--vscode-scrollbarSlider-hoverBackground);
-        }
-
-        .settings-button {
-            margin-left: auto;
-            background: transparent;
-            border: none;
-            color: var(--copilot-text);
-            cursor: pointer;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 14px;
-            transition: background-color 0.2s;
-        }
-
-        .settings-button:hover {
-            background: var(--copilot-input-bg);
-        }
-
-        .settings-panel {
-            background: var(--copilot-bg);
-            border-bottom: 1px solid var(--copilot-border);
-            padding: 16px;
-            animation: slideDown 0.3s ease-out;
-        }
-
-        @keyframes slideDown {
-            from { opacity: 0; max-height: 0; }
-            to { opacity: 1; max-height: 300px; }
-        }
-
-        .settings-section {
-            margin-bottom: 16px;
-        }
-
-        .settings-label {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            font-size: 12px;
-            font-weight: 500;
-            color: var(--copilot-text);
-        }
-
-        .model-select, .settings-input {
-            padding: 8px 12px;
-            border: 1px solid var(--copilot-input-border);
-            border-radius: 4px;
-            background: var(--copilot-input-bg);
-            color: var(--copilot-text);
-            font-size: 12px;
-            width: 100%;
-        }
-
-        .model-select:focus, .settings-input:focus {
-            outline: none;
-            border-color: var(--copilot-primary);
-        }
-
-        .settings-actions {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-
-        .action-button {
-            padding: 6px 12px;
-            border: 1px solid var(--copilot-primary);
-            border-radius: 4px;
-            background: var(--copilot-primary);
-            color: white;
-            font-size: 11px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .action-button:hover {
-            background: var(--copilot-primary-hover);
-        }
-
-        .action-button.secondary {
-            background: transparent;
-            color: var(--copilot-primary);
-        }
-
-        .action-button.secondary:hover {
-            background: var(--copilot-primary);
-            color: white;
-        }
-
-        /* New UI Styles */
-        .header-toolbar {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 12px;
-            background: var(--copilot-bg);
-            border-bottom: 1px solid var(--copilot-border);
-        }
-
-        .tool-button {
-            background: transparent;
-            border: none;
-            color: var(--copilot-text);
-            cursor: pointer;
-            padding: 6px 8px;
-            border-radius: 4px;
-            font-size: 14px;
-            transition: background-color 0.2s;
-        }
-
-        .tool-button:hover {
-            background: var(--copilot-input-bg);
-        }
-
-        .header-spacer {
-            flex: 1;
-        }
-
-        .agent-status {
-            font-size: 11px;
-            color: var(--copilot-muted);
-        }
-
-        .agent-selector {
-            padding: 12px 16px;
-            background: var(--copilot-bg);
-            border-bottom: 1px solid var(--copilot-border);
-        }
-
-        .agent-info {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 8px;
-        }
-
-        .agent-icon {
-            font-size: 16px;
-        }
-
-        .agent-name {
-            font-size: 13px;
-            font-weight: 500;
-            color: var(--copilot-text);
-        }
-
-        .agent-model-dropdown {
-            padding: 4px 8px;
-            border: 1px solid var(--copilot-input-border);
-            border-radius: 4px;
-            background: var(--copilot-input-bg);
-            color: var(--copilot-text);
-            font-size: 11px;
-            margin-left: auto;
-        }
-
-        .add-mcp-button {
-            width: 100%;
-            padding: 8px 12px;
-            border: 1px dashed var(--copilot-border);
-            border-radius: 4px;
-            background: transparent;
-            color: var(--copilot-primary);
-            font-size: 12px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .add-mcp-button:hover {
-            background: var(--copilot-input-bg);
-            border-color: var(--copilot-primary);
-        }
-
-        .attach-button {
-            background: transparent;
-            border: none;
-            color: var(--copilot-muted);
-            cursor: pointer;
-            padding: 8px;
-            font-size: 14px;
-            transition: color 0.2s;
-        }
-
-        .attach-button:hover {
-            color: var(--copilot-text);
-        }
-
-        .input-actions {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .file-counter {
-            font-size: 11px;
-            color: var(--copilot-muted);
-            white-space: nowrap;
-        }
-
-
-        /* Modal Styles */
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 1000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .modal-content {
-            background: var(--copilot-bg);
-            border: 1px solid var(--copilot-border);
-            border-radius: 8px;
-            width: 90%;
-            max-width: 500px;
-            max-height: 80vh;
-            overflow: hidden;
-        }
-
-        .modal-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 16px 20px;
-            border-bottom: 1px solid var(--copilot-border);
-        }
-
-        .modal-header h3 {
-            margin: 0;
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--copilot-text);
-        }
-
-        .modal-close {
-            background: none;
-            border: none;
-            color: var(--copilot-muted);
-            cursor: pointer;
-            font-size: 18px;
-            padding: 4px;
-        }
-
-        .modal-body {
-            padding: 20px;
-            max-height: 400px;
-            overflow-y: auto;
-        }
-
-        .mcp-config-section {
-            margin-bottom: 16px;
-        }
-
-        .config-label {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            font-size: 12px;
-            font-weight: 500;
-            color: var(--copilot-text);
-        }
-
-        .config-input, .config-select, .config-textarea {
-            padding: 8px 12px;
-            border: 1px solid var(--copilot-input-border);
-            border-radius: 4px;
-            background: var(--copilot-input-bg);
-            color: var(--copilot-text);
-            font-size: 12px;
-            width: 100%;
-        }
-
-        .config-textarea {
-            min-height: 60px;
-            resize: vertical;
-        }
-
-        .modal-footer {
-            display: flex;
-            gap: 8px;
-            justify-content: flex-end;
-            padding: 16px 20px;
-            border-top: 1px solid var(--copilot-border);
-        }
-
-        .modal-button {
-            padding: 8px 16px;
-            border: 1px solid var(--copilot-primary);
-            border-radius: 4px;
-            font-size: 12px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .modal-button.primary {
-            background: var(--copilot-primary);
-            color: white;
-        }
-
-        .modal-button.secondary {
-            background: transparent;
-            color: var(--copilot-primary);
-        }
-
-        .modal-button:hover {
-            background: var(--copilot-primary-hover);
-            color: white;
-        }
-
-        /* Code formatting styles */
-        .code-block {
-            background: var(--vscode-textCodeBlock-background);
-            border: 1px solid var(--copilot-border);
-            border-radius: 4px;
-            padding: 12px;
-            margin: 8px 0;
-            overflow-x: auto;
-            font-family: 'Courier New', monospace;
-            font-size: 11px;
-            line-height: 1.4;
-        }
-
-        .inline-code {
-            background: var(--vscode-textCodeBlock-background);
-            padding: 2px 4px;
-            border-radius: 3px;
-            font-family: 'Courier New', monospace;
-            font-size: 11px;
-        }
-
-        /* Typing animation */
-        .typing-indicator {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            color: var(--copilot-muted);
-            font-style: italic;
-        }
-
-        .typing-dots {
-            display: flex;
-            gap: 2px;
-        }
-
-        .typing-dot {
-            width: 4px;
-            height: 4px;
-            border-radius: 50%;
-            background: var(--copilot-muted);
-            animation: typingBounce 1.4s infinite ease-in-out;
-        }
-
-        .typing-dot:nth-child(2) {
-            animation-delay: 0.2s;
-        }
-
-        .typing-dot:nth-child(3) {
-            animation-delay: 0.4s;
-        }
-
-        @keyframes typingBounce {
-            0%, 80%, 100% {
-                transform: scale(0.8);
-                opacity: 0.5;
-            }
-            40% {
-                transform: scale(1);
-                opacity: 1;
-            }
-        }
-
-        /* ChatGPT-style typing cursor */
+        
         .typing-cursor {
-            color: var(--copilot-primary);
-            animation: cursorBlink 1s infinite;
-            font-weight: normal;
+            animation: blink 1s infinite;
         }
-
-        @keyframes cursorBlink {
+        
+        @keyframes blink {
             0%, 50% { opacity: 1; }
             51%, 100% { opacity: 0; }
         }
-
-        /* Streaming message effects */
-        .streaming-message {
-            animation: messageSlideIn 0.3s ease-out;
+        
+        .message-slide-in {
+            animation: slideIn 0.3s ease-out;
         }
-
-        @keyframes messageSlideIn {
+        
+        @keyframes slideIn {
             from {
                 opacity: 0;
                 transform: translateY(10px);
@@ -1190,739 +222,411 @@ class ChatProvider {
                 transform: translateY(0);
             }
         }
-
-        /* Fast mode indicator */
-        .fast-mode-indicator {
-            color: var(--copilot-primary);
-            font-size: 10px;
-            margin-left: 4px;
-            opacity: 0.7;
-        }
-
-        /* Settings improvements */
-        .settings-section {
-            border: 1px solid var(--copilot-border);
-            border-radius: 6px;
-            padding: 12px;
-            background: var(--copilot-input-bg);
-        }
-
-        .settings-section + .settings-section {
-            margin-top: 12px;
-        }
-
-        .settings-input[type="checkbox"] {
-            width: auto;
-            margin-right: 8px;
+        
+        .typing-dots {
+            animation: pulse 1.5s infinite;
         }
     </style>
 </head>
-<body>
-    <div class="chat-header">
-        <div class="header-toolbar">
-            <span class="header-spacer"></span>
-            <span class="agent-status">● Ollama Agent</span>
-            <button class="settings-button" onclick="toggleSettings()" title="Settings">⚙</button>
+<body class="h-screen bg-gray-900 text-white flex flex-col font-mono text-sm">
+    <!-- Header with Settings -->
+    <div class="flex items-center justify-between p-4 border-b border-gray-700 bg-gray-800">
+        <div class="flex items-center space-x-2">
+            <div class="w-4 h-4 bg-gradient-to-r from-blue-500 to-blue-600 rounded-sm flex items-center justify-center text-white text-xs font-bold">R</div>
+            <span class="font-semibold">Replit Copilot</span>
+            <span class="text-xs text-green-400" id="statusIndicator">⚡ Fast Mode</span>
         </div>
+        <button onclick="toggleSettings()" class="p-2 hover:bg-gray-700 rounded-md transition-colors duration-200">
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"></path>
+            </svg>
+        </button>
     </div>
 
-    <div class="agent-selector">
-        <div class="agent-info">
-            <span class="agent-icon">◉</span>
-            <span class="agent-name">Agent</span>
-            <select id="agentModelSelect" class="agent-model-dropdown">
-                <option value="llama3.2:1b">Llama3.2 1B</option>
-                <option value="llama3.2:3b">Llama3.2 3B</option>
-                <option value="llama3.2">Llama3.2</option>
-                <option value="llama3.1">Llama3.1</option>
-                <option value="codellama">CodeLlama</option>
-            </select>
-        </div>
-        <div class="mcp-servers" id="mcpServersList" style="display: none;">
-            <button class="add-mcp-button" onclick="showMCPModal()">
-                + Add MCP Servers
-            </button>
-        </div>
-    </div>
-
-    <div class="settings-panel" id="settingsPanel" style="display: none;">
-        <div class="settings-section">
-            <label class="settings-label">
-                Model:
-                <select id="modelSelect" class="model-select">
+    <!-- Settings Panel -->
+    <div id="settingsPanel" class="hidden bg-gray-800 border-b border-gray-700 p-4 space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Model Selection -->
+            <div class="space-y-2">
+                <label class="block text-sm font-medium text-gray-300">Model</label>
+                <select id="modelSelect" class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <option value="llama3.2:1b">Llama-3.2:1b (Fast)</option>
                     <option value="llama3.2:3b">Llama-3.2:3b</option>
                     <option value="llama3.2">Llama-3.2</option>
                     <option value="llama3.1">Llama-3.1</option>
                     <option value="codellama">CodeLlama</option>
                 </select>
-            </label>
-        </div>
-        
-        <div class="settings-section">
-            <label class="settings-label">
-                MCP Connection Type:
-                <select id="mcpConnectionType" class="model-select" onchange="updateMcpSettings()">
-                    <option value="stdio">STDIO (Fastest - Recommended)</option>
+            </div>
+
+            <!-- MCP Connection Type -->
+            <div class="space-y-2">
+                <label class="block text-sm font-medium text-gray-300">MCP Connection</label>
+                <select id="mcpConnectionType" onchange="updateMcpSettings()" class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="stdio">STDIO (Fastest)</option>
                     <option value="http">HTTP Server</option>
                     <option value="websocket">WebSocket</option>
                 </select>
+            </div>
+        </div>
+
+        <!-- STDIO Configuration -->
+        <div id="mcpStdioSection" class="space-y-3 bg-gray-700 p-3 rounded-lg">
+            <h4 class="text-sm font-medium text-blue-400">STDIO Configuration</h4>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs text-gray-300 mb-1">Command</label>
+                    <input type="text" id="mcpStdioCommand" value="node" class="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-300 mb-1">Timeout (ms)</label>
+                    <input type="number" id="mcpTimeout" value="2000" min="1000" max="10000" class="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500">
+                </div>
+            </div>
+            <div>
+                <label class="block text-xs text-gray-300 mb-1">Args (JSON Array)</label>
+                <textarea id="mcpStdioArgs" rows="2" class="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500">[\"-e\", \"console.log('MCP Ready'); process.stdin.pipe(process.stdout);\"]</textarea>
+            </div>
+        </div>
+
+        <!-- Server Configuration (Hidden by default) -->
+        <div id="mcpServerSection" class="hidden space-y-3 bg-gray-700 p-3 rounded-lg">
+            <h4 class="text-sm font-medium text-blue-400">Server Configuration</h4>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs text-gray-300 mb-1">Server URL</label>
+                    <input type="text" id="mcpServerUrl" placeholder="ws://localhost:8080" class="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-300 mb-1">API Key</label>
+                    <input type="password" id="mcpApiKey" placeholder="Optional..." class="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500">
+                </div>
+            </div>
+        </div>
+
+        <!-- Feature Toggles -->
+        <div class="flex flex-wrap gap-4">
+            <label class="flex items-center space-x-2 text-sm">
+                <input type="checkbox" id="enableStreaming" checked class="rounded bg-gray-700 border-gray-600 text-blue-500 focus:ring-blue-500">
+                <span class="text-gray-300">ChatGPT-style streaming</span>
+            </label>
+            <label class="flex items-center space-x-2 text-sm">
+                <input type="checkbox" id="enableFastMode" checked class="rounded bg-gray-700 border-gray-600 text-blue-500 focus:ring-blue-500">
+                <span class="text-gray-300">Fast mode (2s timeouts)</span>
             </label>
         </div>
 
-        <div class="settings-section" id="mcpStdioSection">
-            <label class="settings-label">
-                STDIO Command:
-                <input type="text" id="mcpStdioCommand" class="settings-input" value="node" placeholder="node, python, etc." />
-            </label>
-            <label class="settings-label">
-                STDIO Args (JSON array):
-                <textarea id="mcpStdioArgs" class="settings-input" rows="2" placeholder='["-e", "console.log(\\"MCP Ready\\"); process.stdin.pipe(process.stdout);"]'>[\"-e\", \"console.log('MCP Ready'); process.stdin.pipe(process.stdout);\"]</textarea>
-            </label>
-            <label class="settings-label">
-                Response Timeout (ms):
-                <input type="number" id="mcpTimeout" class="settings-input" value="2000" min="1000" max="10000" />
-            </label>
-        </div>
-
-        <div class="settings-section" id="mcpServerSection" style="display: none;">
-            <label class="settings-label">
-                MCP Server URL:
-                <input type="text" id="mcpServerUrl" class="settings-input" placeholder="ws://localhost:8080 or http://localhost:8080" />
-            </label>
-            <label class="settings-label">
-                MCP API Key (optional):
-                <input type="password" id="mcpApiKey" class="settings-input" placeholder="Enter API key..." />
-            </label>
-        </div>
-
-        <div class="settings-section">
-            <label class="settings-label">
-                <input type="checkbox" id="enableStreaming" checked> Enable ChatGPT-style streaming responses
-            </label>
-            <label class="settings-label">
-                <input type="checkbox" id="enableFastMode" checked> Fast mode (reduced timeouts)
-            </label>
-        </div>
-
-        <div class="settings-actions">
-            <button class="action-button" onclick="saveSettings()">💾 Save Settings</button>
-            <button class="action-button secondary" onclick="testConnection()">🔍 Test Connection</button>
-            <button class="action-button secondary" onclick="refreshModels()">↻ Refresh Models</button>
-            <button class="action-button secondary" onclick="resetToDefaults()">🔄 Reset Defaults</button>
+        <!-- Action Buttons -->
+        <div class="flex flex-wrap gap-2">
+            <button onclick="saveSettings()" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm font-medium transition-colors duration-200">💾 Save</button>
+            <button onclick="testConnection()" class="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-sm font-medium transition-colors duration-200">🔍 Test</button>
+            <button onclick="refreshModels()" class="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 rounded text-sm font-medium transition-colors duration-200">↻ Refresh</button>
+            <button onclick="resetToDefaults()" class="px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded text-sm font-medium transition-colors duration-200">🔄 Reset</button>
         </div>
     </div>
 
-    <div class="chat-container" id="chatContainer">
-        <div class="messages-wrapper" id="messagesWrapper">
-            <div class="welcome-message">
-                <div class="welcome-title">Welcome to Ollama Chat</div>
-                <div class="welcome-subtitle">
-                    I can help you write code, debug issues, explain concepts, and work with your files using Ollama.
-                    <br>Start by asking me a question or describing what you'd like to build.
-                </div>
+    <!-- Chat Container -->
+    <div id="chatContainer" class="flex-1 overflow-y-auto bg-gray-900">
+        <div id="messagesWrapper" class="p-4 space-y-4 min-h-full">
+            <div class="text-center text-gray-400 text-sm message-slide-in">
+                <div class="text-lg font-semibold text-blue-400 mb-2">⚡ Replit Copilot</div>
+                <div>Fast AI-powered coding assistant with MCP STDIO integration.<br>Ask me anything about code, and I'll respond quickly!</div>
             </div>
         </div>
     </div>
 
-    <div class="input-area">
-        <div class="input-container">
-            <div class="input-wrapper">
-                <button class="attach-button" onclick="attachFile()" title="Attach file">⚡</button>
+    <!-- Input Area -->
+    <div class="border-t border-gray-700 bg-gray-800 p-4">
+        <div class="flex items-end space-x-3">
+            <div class="flex-1 relative">
                 <textarea 
                     id="chatInput" 
-                    class="chat-input" 
-                    placeholder="Ask about this codebase..."
+                    placeholder="Ask about code, debugging, or anything..." 
                     rows="1"
-                    maxlength="4000"
+                    class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    onkeydown="handleKeyPress(event)"
                 ></textarea>
-                <div class="input-actions">
-                    <span class="file-counter" id="fileCounter">Alt⌘ Active file</span>
-                    <button id="sendButton" class="send-button" title="Send message">
-                        Enter
-                    </button>
-                </div>
             </div>
-        </div>
-    </div>
-
-    <!-- MCP Modal -->
-    <div class="modal-overlay" id="mcpModal" style="display: none;">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Add MCP Servers</h3>
-                <button class="modal-close" onclick="closeMCPModal()">×</button>
-            </div>
-            <div class="modal-body">
-                <div class="mcp-config-section">
-                    <label class="config-label">
-                        Server Name:
-                        <input type="text" id="mcpServerName" class="config-input" placeholder="My MCP Server" />
-                    </label>
-                </div>
-                <div class="mcp-config-section">
-                    <label class="config-label">
-                        Connection Type:
-                        <select id="mcpConnectionType" class="config-select">
-                            <option value="stdio">STDIO</option>
-                            <option value="websocket">WebSocket</option>
-                            <option value="http">HTTP</option>
-                        </select>
-                    </label>
-                </div>
-                <div class="mcp-config-section" id="stdioConfig">
-                    <label class="config-label">
-                        Command:
-                        <input type="text" id="mcpCommand" class="config-input" placeholder="node server.js" />
-                    </label>
-                    <label class="config-label">
-                        Arguments (one per line):
-                        <textarea id="mcpArgs" class="config-textarea" placeholder="--port 3000\n--verbose"></textarea>
-                    </label>
-                </div>
-                <div class="mcp-config-section" id="urlConfig" style="display: none;">
-                    <label class="config-label">
-                        Server URL:
-                        <input type="text" id="mcpUrl" class="config-input" placeholder="ws://localhost:8080 or http://localhost:8080" />
-                    </label>
-                    <label class="config-label">
-                        API Key (optional):
-                        <input type="password" id="mcpKey" class="config-input" placeholder="Enter API key..." />
-                    </label>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="modal-button secondary" onclick="closeMCPModal()">Cancel</button>
-                <button class="modal-button primary" onclick="addMCPServer()">Add Server</button>
-            </div>
+            <button 
+                id="sendButton" 
+                onclick="sendMessage()" 
+                class="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-medium transition-colors duration-200"
+            >
+                Send
+            </button>
         </div>
     </div>
 
     <script>
-        try {
-            console.log('[WEBVIEW] Starting webview initialization...');
+        const vscode = acquireVsCodeApi();
+        let isThinking = false;
+        let currentStreamingMessage = null;
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
             
-            const vscode = acquireVsCodeApi();
-            const chatContainer = document.getElementById('chatContainer');
-            const messagesWrapper = document.getElementById('messagesWrapper');
-            const chatInput = document.getElementById('chatInput');
+            if (!message || isThinking) return;
+            
+            input.value = '';
+            input.style.height = 'auto';
+            
+            vscode.postMessage({
+                type: 'sendMessage',
+                text: message
+            });
+        }
+
+        function addMessage(content, isUser, timestamp = null) {
+            const wrapper = document.getElementById('messagesWrapper');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = \`message-slide-in \${isUser ? 'ml-8' : 'mr-8'}\`;
+            
+            messageDiv.innerHTML = \`
+                <div class="flex items-start space-x-3 \${isUser ? 'flex-row-reverse space-x-reverse' : ''}">
+                    <div class="w-8 h-8 rounded-full \${isUser ? 'bg-green-600' : 'bg-blue-600'} flex items-center justify-center text-white text-sm font-bold">
+                        \${isUser ? 'U' : 'R'}
+                    </div>
+                    <div class="flex-1 \${isUser ? 'bg-green-800' : 'bg-gray-800'} rounded-lg p-3">
+                        <div class="text-sm">\${content}</div>
+                        \${timestamp ? \`<div class="text-xs text-gray-400 mt-1">\${timestamp}</div>\` : ''}
+                    </div>
+                </div>
+            \`;
+            
+            wrapper.appendChild(messageDiv);
+            scrollToBottom();
+        }
+
+        function showTypingIndicator() {
+            if (currentStreamingMessage) return;
+            
+            const wrapper = document.getElementById('messagesWrapper');
+            const typingDiv = document.createElement('div');
+            typingDiv.className = 'typing-message message-slide-in mr-8';
+            typingDiv.innerHTML = \`
+                <div class="flex items-start space-x-3">
+                    <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-bold">R</div>
+                    <div class="flex-1 bg-gray-800 rounded-lg p-3">
+                        <div class="flex items-center space-x-2 text-sm text-gray-400">
+                            <span>Thinking</span>
+                            <div class="flex space-x-1 typing-dots">
+                                <div class="w-1 h-1 bg-gray-400 rounded-full animate-bounce"></div>
+                                <div class="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
+                                <div class="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            \`;
+            
+            wrapper.appendChild(typingDiv);
+            scrollToBottom();
+            isThinking = true;
+        }
+
+        function hideTypingIndicator() {
+            const typingMsg = document.querySelector('.typing-message');
+            if (typingMsg) {
+                typingMsg.remove();
+            }
+            isThinking = false;
+        }
+
+        function handleStreamingToken(token, fullMessage) {
+            if (!currentStreamingMessage) {
+                hideTypingIndicator();
+                
+                const wrapper = document.getElementById('messagesWrapper');
+                currentStreamingMessage = document.createElement('div');
+                currentStreamingMessage.className = 'streaming-message message-slide-in mr-8';
+                currentStreamingMessage.innerHTML = \`
+                    <div class="flex items-start space-x-3">
+                        <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-bold">R</div>
+                        <div class="flex-1 bg-gray-800 rounded-lg p-3">
+                            <div class="text-sm content-area"></div>
+                        </div>
+                    </div>
+                \`;
+                wrapper.appendChild(currentStreamingMessage);
+            }
+
+            const contentDiv = currentStreamingMessage.querySelector('.content-area');
+            
+            // ChatGPT-style character-by-character typing effect
+            if (document.getElementById('enableStreaming')?.checked) {
+                const currentText = contentDiv.textContent || '';
+                const newText = fullMessage;
+                
+                if (newText.length > currentText.length) {
+                    const nextChar = newText[currentText.length];
+                    contentDiv.innerHTML = newText.substring(0, currentText.length + 1) + '<span class="typing-cursor text-blue-400">▋</span>';
+                    
+                    // Continue typing with delay
+                    setTimeout(() => {
+                        if (contentDiv && newText.length > currentText.length + 1) {
+                            contentDiv.innerHTML = newText.substring(0, currentText.length + 2) + '<span class="typing-cursor text-blue-400">▋</span>';
+                        }
+                    }, 50); // Fast typing speed
+                }
+            } else {
+                contentDiv.innerHTML = fullMessage + '<span class="typing-cursor text-blue-400">▋</span>';
+            }
+            
+            scrollToBottom();
+        }
+
+        function finalizeStreamingMessage(finalMessage, formattedMessage) {
+            if (currentStreamingMessage) {
+                const contentDiv = currentStreamingMessage.querySelector('.content-area');
+                contentDiv.innerHTML = formattedMessage || finalMessage;
+                currentStreamingMessage.classList.remove('streaming-message');
+                currentStreamingMessage = null;
+            }
+            scrollToBottom();
+        }
+
+        function scrollToBottom() {
+            const container = document.getElementById('chatContainer');
+            setTimeout(() => {
+                container.scrollTop = container.scrollHeight;
+            }, 50);
+        }
+
+        function toggleSettings() {
+            const panel = document.getElementById('settingsPanel');
+            panel.classList.toggle('hidden');
+            if (!panel.classList.contains('hidden')) {
+                vscode.postMessage({ type: 'getSettings' });
+            }
+        }
+
+        function updateMcpSettings() {
+            const connectionType = document.getElementById('mcpConnectionType').value;
+            const stdioSection = document.getElementById('mcpStdioSection');
+            const serverSection = document.getElementById('mcpServerSection');
+            
+            if (connectionType === 'stdio') {
+                stdioSection.classList.remove('hidden');
+                serverSection.classList.add('hidden');
+            } else {
+                stdioSection.classList.add('hidden');
+                serverSection.classList.remove('hidden');
+            }
+        }
+
+        function saveSettings() {
+            const settings = {
+                model: document.getElementById('modelSelect').value,
+                mcpConnectionType: document.getElementById('mcpConnectionType').value,
+                mcpStdioCommand: document.getElementById('mcpStdioCommand').value,
+                mcpStdioArgs: JSON.parse(document.getElementById('mcpStdioArgs').value || '[]'),
+                mcpTimeout: parseInt(document.getElementById('mcpTimeout').value) || 2000,
+                mcpServerUrl: document.getElementById('mcpServerUrl').value,
+                mcpApiKey: document.getElementById('mcpApiKey').value,
+                enableStreaming: document.getElementById('enableStreaming').checked,
+                enableFastMode: document.getElementById('enableFastMode').checked
+            };
+
+            vscode.postMessage({ type: 'saveSettings', settings });
+        }
+
+        function testConnection() {
+            vscode.postMessage({ type: 'testConnection' });
+        }
+
+        function refreshModels() {
+            vscode.postMessage({ type: 'refreshModels' });
+        }
+
+        function resetToDefaults() {
+            document.getElementById('modelSelect').value = 'llama3.2:1b';
+            document.getElementById('mcpConnectionType').value = 'stdio';
+            document.getElementById('mcpStdioCommand').value = 'node';
+            document.getElementById('mcpStdioArgs').value = '[\"-e\", \"console.log(\'MCP Ready\'); process.stdin.pipe(process.stdout);\"]';
+            document.getElementById('mcpTimeout').value = '2000';
+            document.getElementById('enableStreaming').checked = true;
+            document.getElementById('enableFastMode').checked = true;
+            updateMcpSettings();
+        }
+
+        // Message handlers
+        window.addEventListener('message', function(event) {
+            const message = event.data;
+            console.log('Received message:', message);
+            
             const sendButton = document.getElementById('sendButton');
             
-            console.log('[WEBVIEW] Elements found:', {
-                chatContainer: !!chatContainer,
-                messagesWrapper: !!messagesWrapper,
-                chatInput: !!chatInput,
-                sendButton: !!sendButton
-            });
-            
-            let isThinking = false;
-            let currentStreamingMessage = null;
-            
-            if (!vscode) {
-                console.error('[WEBVIEW] VS Code API not available!');
-                return;
-            }
-            
-            if (!chatInput || !sendButton) {
-                console.error('[WEBVIEW] Critical elements not found!');
-                return;
-            }
-            
-            // Input auto-resize
-            chatInput.addEventListener('input', function() {
-                this.style.height = 'auto';
-                this.style.height = Math.min(this.scrollHeight, 120) + 'px';
-            });
-            
-            function addMessage(content, isUser, timestamp = null) {
-                const welcomeMsg = document.querySelector('.welcome-message');
-                if (welcomeMsg && !isUser) {
-                    welcomeMsg.remove();
-                }
-
-                const messageDiv = document.createElement('div');
-                messageDiv.className = 'message ' + (isUser ? 'user-message' : 'assistant-message');
-                
-                const messageContent = \`
-                    <div class="message-header">
-                        <div class="message-avatar \${isUser ? 'user-avatar' : 'assistant-avatar'}">
-                            \${isUser ? 'U' : 'R'}
-                        </div>
-                        <span>\${isUser ? 'You' : 'Ollama Chat'}</span>
-                        \${timestamp ? \`<span style="color: var(--copilot-muted); font-weight: normal; margin-left: auto;">\${timestamp}</span>\` : ''}
-                    </div>
-                    <div class="message-content">\${content}</div>
-                \`;
-                
-                messageDiv.innerHTML = messageContent;
-                    if (messagesWrapper) {
-                        messagesWrapper.appendChild(messageDiv);
-                        scrollToBottom();
+            switch (message.type) {
+                case 'userMessage':
+                    addMessage(message.message, true);
+                    break;
+                case 'startTyping':
+                    showTypingIndicator();
+                    if (sendButton) sendButton.disabled = true;
+                    break;
+                case 'streamToken':
+                    handleStreamingToken(message.token, message.fullMessage);
+                    break;
+                case 'assistantMessage':
+                    hideTypingIndicator();
+                    finalizeStreamingMessage(message.message, message.formatted);
+                    if (sendButton) sendButton.disabled = false;
+                    break;
+                case 'error':
+                    hideTypingIndicator();
+                    addMessage('❌ ' + message.message, false);
+                    if (sendButton) sendButton.disabled = false;
+                    break;
+                case 'settingsLoaded':
+                    const settings = message.settings;
+                    document.getElementById('modelSelect').value = settings.model;
+                    document.getElementById('mcpConnectionType').value = settings.mcpConnectionType;
+                    document.getElementById('mcpStdioCommand').value = settings.mcpStdioCommand;
+                    document.getElementById('mcpStdioArgs').value = JSON.stringify(settings.mcpStdioArgs);
+                    document.getElementById('mcpTimeout').value = settings.mcpTimeout;
+                    document.getElementById('mcpServerUrl').value = settings.mcpServerUrl;
+                    document.getElementById('mcpApiKey').value = settings.mcpApiKey;
+                    document.getElementById('enableStreaming').checked = settings.enableStreaming;
+                    document.getElementById('enableFastMode').checked = settings.enableFastMode;
+                    updateMcpSettings();
+                    break;
+                case 'settingsSaved':
+                    addMessage(message.message, false);
+                    document.getElementById('statusIndicator').textContent = '⚡ Fast Mode';
+                    document.getElementById('statusIndicator').className = 'text-xs text-green-400';
+                    break;
+                case 'connectionTest':
+                    addMessage(message.message, false);
+                    break;
+                case 'modelsRefreshed':
+                    // Update model dropdowns
+                    const modelSelect = document.getElementById('modelSelect');
+                    const currentValue = modelSelect.value;
+                    modelSelect.innerHTML = '';
+                    message.models.forEach(model => {
+                        const option = document.createElement('option');
+                        option.value = model;
+                        option.textContent = model;
+                        modelSelect.appendChild(option);
+                    });
+                    if (message.models.includes(currentValue)) {
+                        modelSelect.value = currentValue;
                     }
-                }
-
-            function showThinking() {
-                if (isThinking) return;
-                isThinking = true;
-
-                const thinkingDiv = document.createElement('div');
-                thinkingDiv.className = 'message assistant-message thinking-message';
-                thinkingDiv.innerHTML = \`
-                    <div class="thinking">
-                        <div class="message-avatar assistant-avatar">R</div>
-                        <span>Ollama Chat is thinking</span>
-                        <div class="thinking-dots">
-                            <div class="thinking-dot"></div>
-                            <div class="thinking-dot"></div>
-                            <div class="thinking-dot"></div>
-                        </div>
-                    </div>
-                \`;
-                
-                messagesWrapper.appendChild(thinkingDiv);
-                scrollToBottom();
+                    break;
             }
+        });
 
-            function hideThinking() {
-                const thinkingMsg = document.querySelector('.thinking-message');
-                if (thinkingMsg) {
-                    thinkingMsg.remove();
-                }
-                isThinking = false;
-            }
-
-            function scrollToBottom() {
-                setTimeout(() => {
-                    chatContainer.scrollTop = chatContainer.scrollHeight;
-                }, 50);
-            }
-
-            function sendMessage() {
-                console.log('[WEBVIEW] sendMessage called');
-                if (!chatInput) {
-                    console.error('[WEBVIEW] chatInput not found');
-                    return;
-                }
-                
-                const message = chatInput.value.trim();
-                console.log('[WEBVIEW] Message to send:', message);
-                
-                if (!message || isThinking) {
-                    console.log('[WEBVIEW] No message or already thinking');
-                    return;
-                }
-
-                // Clear input immediately
-                chatInput.value = '';
-                chatInput.style.height = 'auto';
-                if (sendButton) sendButton.disabled = true;
-
-                console.log('[WEBVIEW] Sending message to backend...');
-                vscode.postMessage({
-                    type: 'sendMessage',
-                    text: message
-                });
-            }
-
-            function insertSuggestion(text) {
-                chatInput.value = text;
-                chatInput.focus();
-                chatInput.style.height = 'auto';
-                chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px';
-            }
-
-            // Settings functions
-            function toggleSettings() {
-                const panel = document.getElementById('settingsPanel');
-                panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-                
-                if (panel.style.display === 'block') {
-                    loadCurrentSettings();
-                }
-            }
-
-            function loadCurrentSettings() {
-                vscode.postMessage({
-                    type: 'getSettings'
-                });
-            }
-
-            function saveSettings() {
-                const modelSelect = document.getElementById('modelSelect');
-                const mcpConnectionType = document.getElementById('mcpConnectionType');
-                const mcpStdioCommand = document.getElementById('mcpStdioCommand');
-                const mcpStdioArgs = document.getElementById('mcpStdioArgs');
-                const mcpTimeout = document.getElementById('mcpTimeout');
-                const mcpServerUrl = document.getElementById('mcpServerUrl');
-                const mcpApiKey = document.getElementById('mcpApiKey');
-                const enableStreaming = document.getElementById('enableStreaming');
-                const enableFastMode = document.getElementById('enableFastMode');
-
-                let stdioArgs = [];
-                try {
-                    stdioArgs = JSON.parse(mcpStdioArgs.value || '[]');
-                } catch (e) {
-                    stdioArgs = ['-e', 'console.log("MCP Ready"); process.stdin.pipe(process.stdout);'];
-                }
-
-                vscode.postMessage({
-                    type: 'saveSettings',
-                    settings: {
-                        model: modelSelect.value,
-                        mcpConnectionType: mcpConnectionType.value,
-                        mcpStdioCommand: mcpStdioCommand.value,
-                        mcpStdioArgs: stdioArgs,
-                        mcpTimeout: parseInt(mcpTimeout.value) || 2000,
-                        mcpServerUrl: mcpServerUrl.value,
-                        mcpApiKey: mcpApiKey.value,
-                        enableStreaming: enableStreaming.checked,
-                        enableFastMode: enableFastMode.checked
-                    }
-                });
-
-                // Show confirmation
-                const saveBtn = event.target;
-                const originalText = saveBtn.textContent;
-                saveBtn.textContent = '√ Saved';
-                setTimeout(() => {
-                    saveBtn.textContent = originalText;
-                }, 2000);
-            }
-
-            function testConnection() {
-                vscode.postMessage({
-                    type: 'testConnection'
-                });
-            }
-
-            function refreshModels() {
-                vscode.postMessage({
-                    type: 'refreshModels'
-                });
-            }
-
-            // Streaming and typing functions
-            function showTypingIndicator() {
-                if (currentStreamingMessage) return;
-                
-                const typingDiv = document.createElement('div');
-                typingDiv.className = 'message assistant-message typing-message';
-                typingDiv.innerHTML = \`
-                    <div class="message-header">
-                        <div class="message-avatar assistant-avatar">O</div>
-                        <span>Ollama Chat</span>
-                    </div>
-                    <div class="message-content typing-indicator">
-                        <span>Thinking</span>
-                        <div class="typing-dots">
-                            <div class="typing-dot"></div>
-                            <div class="typing-dot"></div>
-                            <div class="typing-dot"></div>
-                        </div>
-                    </div>
-                \`;
-                
-                messagesWrapper.appendChild(typingDiv);
-                scrollToBottom();
-                isThinking = true;
-            }
-
-            function hideTypingIndicator() {
-                const typingMsg = document.querySelector('.typing-message');
-                if (typingMsg) {
-                    typingMsg.remove();
-                }
-                isThinking = false;
-            }
-
-            function handleStreamingToken(token, fullMessage) {
-                if (!currentStreamingMessage) {
-                    // Create new streaming message
-                    currentStreamingMessage = document.createElement('div');
-                    currentStreamingMessage.className = 'message assistant-message streaming-message';
-                    currentStreamingMessage.innerHTML = \`
-                        <div class="message-header">
-                            <div class="message-avatar assistant-avatar">R</div>
-                            <span>Replit Copilot</span>
-                        </div>
-                        <div class="message-content"><span class="typing-cursor">▋</span></div>
-                    \`;
-                    messagesWrapper.appendChild(currentStreamingMessage);
-                }
-
-                // Update content with ChatGPT-style typing effect
-                const contentDiv = currentStreamingMessage.querySelector('.message-content');
-                
-                // Add character-by-character animation for fast streaming
-                if (token && token.length > 0) {
-                    const currentText = contentDiv.textContent.replace('▋', '');
-                    const newText = currentText + token;
-                    
-                    // Simulate typing by adding one character at a time with delay
-                    let charIndex = currentText.length;
-                    const typeNextChar = () => {
-                        if (charIndex < newText.length) {
-                            contentDiv.innerHTML = newText.substring(0, charIndex + 1) + '<span class="typing-cursor">▋</span>';
-                            charIndex++;
-                            if (document.getElementById('enableStreaming')?.checked) {
-                                setTimeout(typeNextChar, 15); // 15ms delay between characters for smooth typing
-                            } else {
-                                contentDiv.innerHTML = newText + '<span class="typing-cursor">▋</span>';
-                            }
-                        }
-                    };
-                    typeNextChar();
-                } else {
-                    // Fallback to immediate update
-                    contentDiv.innerHTML = fullMessage + '<span class="typing-cursor">▋</span>';
-                }
-                
-                scrollToBottom();
-            }
-
-            function finalizeStreamingMessage(finalMessage, formattedMessage) {
-                if (currentStreamingMessage) {
-                    const contentDiv = currentStreamingMessage.querySelector('.message-content');
-                    contentDiv.innerHTML = formattedMessage || finalMessage;
-                    currentStreamingMessage.classList.remove('streaming-message');
-                    currentStreamingMessage = null;
-                }
-                scrollToBottom();
-            }
-
-            function updateModelDropdowns(models) {
-                const modelSelects = ['modelSelect', 'agentModelSelect'];
-                modelSelects.forEach(selectId => {
-                    const select = document.getElementById(selectId);
-                    if (select) {
-                        const currentValue = select.value;
-                        select.innerHTML = '';
-                        const modelsToUse = models.length > 0 ? models : ['llama3.2:1b', 'llama3.2:3b', 'llama3.2', 'llama3.1', 'codellama'];
-                        modelsToUse.forEach(model => {
-                            const option = document.createElement('option');
-                            option.value = model;
-                            option.textContent = model;
-                            select.appendChild(option);
-                        });
-                        if (modelsToUse.includes(currentValue)) {
-                            select.value = currentValue;
-                        }
-                    }
-                });
-            }
-
-            // UI action functions
-            function goBack() {
-                // Navigate back or refresh chat
-                location.reload();
-            }
-            function openFork() {
-                // Open VS Code command palette for Git actions
-                vscode.postMessage({ type: 'executeCommand', command: 'git.branchFrom' });
-            }
-            function openEdit() {
-                // Focus on currently open file
-                vscode.postMessage({ type: 'executeCommand', command: 'workbench.action.focusActiveEditorGroup' });
-            }
-            function openChat() {
-                // Focus on chat input and show chat
-                chatInput.focus();
-                const chatContainer = document.getElementById('chatContainer');
-                if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
-            }
-            function openTools() {
-                // Toggle settings panel
-                toggleSettings();
-            }
-            function toggleMCP() {
-                const mcpList = document.getElementById('mcpServersList');
-                mcpList.style.display = mcpList.style.display === 'none' ? 'block' : 'none';
-            }
-
-            function attachFile() {
-                vscode.postMessage({ type: 'attachFile' });
-            }
-
-            function showMCPModal() {
-                document.getElementById('mcpModal').style.display = 'flex';
-                
-                // Handle connection type change
-                const connectionType = document.getElementById('mcpConnectionType');
-                const stdioConfig = document.getElementById('stdioConfig');
-                const urlConfig = document.getElementById('urlConfig');
-                
-                connectionType.addEventListener('change', function() {
-                    if (this.value === 'stdio') {
-                        stdioConfig.style.display = 'block';
-                        urlConfig.style.display = 'none';
-                    } else {
-                        stdioConfig.style.display = 'none';
-                        urlConfig.style.display = 'block';
-                    }
-                });
-            }
-
-            function closeMCPModal() {
-                document.getElementById('mcpModal').style.display = 'none';
-            }
-
-            function addMCPServer() {
-                const name = document.getElementById('mcpServerName').value;
-                const type = document.getElementById('mcpConnectionType').value;
-                
-                let config = { name, type };
-                
-                if (type === 'stdio') {
-                    config.command = document.getElementById('mcpCommand').value;
-                    config.args = document.getElementById('mcpArgs').value.split('\n').filter(arg => arg.trim());
-                } else {
-                    config.url = document.getElementById('mcpUrl').value;
-                    config.apiKey = document.getElementById('mcpKey').value;
-                }
-                
-                vscode.postMessage({
-                    type: 'addMCPServer',
-                    config: config
-                });
-                
-                closeMCPModal();
-            }
-
-            // Model selection handler
-            document.getElementById('agentModelSelect').addEventListener('change', function() {
-                vscode.postMessage({
-                    type: 'changeModel',
-                    model: this.value
-                });
-            });
-
-            function updateMcpSettings() {
-                const connectionType = document.getElementById('mcpConnectionType').value;
-                const stdioSection = document.getElementById('mcpStdioSection');
-                const serverSection = document.getElementById('mcpServerSection');
-                
-                if (connectionType === 'stdio') {
-                    stdioSection.style.display = 'block';
-                    serverSection.style.display = 'none';
-                } else {
-                    stdioSection.style.display = 'none';
-                    serverSection.style.display = 'block';
-                }
-            }
-
-            function resetToDefaults() {
-                document.getElementById('modelSelect').value = 'llama3.2:1b';
-                document.getElementById('mcpConnectionType').value = 'stdio';
-                document.getElementById('mcpStdioCommand').value = 'node';
-                document.getElementById('mcpStdioArgs').value = '[\"-e\", \"console.log(\'MCP Ready\'); process.stdin.pipe(process.stdout);\"]';
-                document.getElementById('mcpTimeout').value = '2000';
-                document.getElementById('mcpServerUrl').value = '';
-                document.getElementById('mcpApiKey').value = '';
-                document.getElementById('enableStreaming').checked = true;
-                document.getElementById('enableFastMode').checked = true;
-                updateMcpSettings();
-            }
-
-            // Make functions global
-            window.insertSuggestion = insertSuggestion;
-            window.toggleSettings = toggleSettings;
-            window.saveSettings = saveSettings;
-            window.testConnection = testConnection;
-            window.refreshModels = refreshModels;
-            window.updateMcpSettings = updateMcpSettings;
-            window.resetToDefaults = resetToDefaults;
-            window.attachFile = attachFile;
-            window.showMCPModal = showMCPModal;
-            window.closeMCPModal = closeMCPModal;
-            window.addMCPServer = addMCPServer;
-
-            // Add event listeners with error handling
-            if (sendButton) {
-                sendButton.addEventListener('click', function(e) {
-                    console.log('[WEBVIEW] Send button clicked');
-                    e.preventDefault();
-                    sendMessage();
-                });
-                console.log('[WEBVIEW] Send button listener attached');
-            } else {
-                console.error('[WEBVIEW] Send button not found!');
-            }
-            
-            if (chatInput) {
-                chatInput.addEventListener('keydown', function(e) {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                        console.log('[WEBVIEW] Enter key pressed');
-                        e.preventDefault();
-                        e.stopPropagation();
-                        sendMessage();
-                    }
-                });
-                
-                chatInput.addEventListener('keypress', function(e) {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        sendMessage();
-                    }
-                });
-                console.log('[WEBVIEW] Chat input listeners attached');
-            } else {
-                console.error('[WEBVIEW] Chat input not found!');
-            }
-
-            window.addEventListener('message', function(event) {
-                const message = event.data;
-                console.log('[WEBVIEW] Received message from backend:', message);
-                
-                hideThinking();
-                if (sendButton) sendButton.disabled = false;
-
-                switch (message.type) {
-                    case 'userMessage':
-                        console.log('[WEBVIEW] Adding user message:', message.message);
-                        addMessage(message.message, true);
-                        break;
-                    case 'startTyping':
-                        showTypingIndicator();
-                        break;
-                    case 'streamToken':
-                        handleStreamingToken(message.token, message.fullMessage);
-                        break;
-                    case 'assistantMessage':
-                        hideTypingIndicator();
-                        finalizeStreamingMessage(message.message, message.formatted);
-                        break;
-                    case 'error':
-                        hideTypingIndicator();
-                        addMessage('Error: ' + message.message, false);
-                        break;
-                    case 'settingsLoaded':
-                        document.getElementById('modelSelect').value = message.settings.model || 'llama3.2:1b';
-                        document.getElementById('agentModelSelect').value = message.settings.model || 'llama3.2:1b';
-                        document.getElementById('mcpServerUrl').value = message.settings.mcpServerUrl || '';
-                        document.getElementById('mcpApiKey').value = message.settings.mcpApiKey || '';
-                        break;
-                    case 'modelsRefreshed':
-                        updateModelDropdowns(message.models);
-                        break;
-                    case 'connectionTest':
-                        addMessage(message.message, false);
-                        break;
-                    case 'fileOperationResult':
-                        addMessage('[TOOL] ' + message.operation + ': ' + JSON.stringify(message.result, null, 2), false);
-                        break;
-                }
-            });
-
-            // Add global catch for any remaining errors
-            setTimeout(() => {
-                if (chatInput) chatInput.focus();
-                console.log('[WEBVIEW] Initialization fully complete!');
-            }, 100);
-        
-        } catch (error) {
-            console.error('[WEBVIEW] Script initialization error:', error);
-        }
+        // Initialize
+        setTimeout(() => {
+            document.getElementById('chatInput').focus();
+        }, 100);
     </script>
 </body>
 </html>`;
