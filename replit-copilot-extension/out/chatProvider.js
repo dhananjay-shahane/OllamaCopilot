@@ -1149,14 +1149,8 @@ class ChatProvider {
 <body>
     <div class="chat-header">
         <div class="header-toolbar">
-            <button class="tool-button" onclick="goBack()" title="Back">←</button>
-            <button class="tool-button" onclick="openFork()" title="Fork">⑃</button>
-            <button class="tool-button" onclick="openEdit()" title="Edit">✎</button>
-            <button class="tool-button" onclick="openChat()" title="Chat">⚊</button>
-            <button class="tool-button" onclick="openTools()" title="Tools">⚙</button>
-            <button class="tool-button" onclick="toggleMCP()" title="MCP">⚏</button>
             <span class="header-spacer"></span>
-            <span class="agent-status">● Local Agent</span>
+            <span class="agent-status">● Ollama Agent</span>
             <button class="settings-button" onclick="toggleSettings()" title="Settings">⚙</button>
         </div>
     </div>
@@ -1659,12 +1653,6 @@ class ChatProvider {
             window.saveSettings = saveSettings;
             window.testConnection = testConnection;
             window.refreshModels = refreshModels;
-            window.goBack = goBack;
-            window.openFork = openFork;
-            window.openEdit = openEdit;
-            window.openChat = openChat;
-            window.openTools = openTools;
-            window.toggleMCP = toggleMCP;
             window.attachFile = attachFile;
             window.showMCPModal = showMCPModal;
             window.closeMCPModal = closeMCPModal;
@@ -1678,6 +1666,8 @@ class ChatProvider {
                     sendMessage();
                 });
                 console.log('[WEBVIEW] Send button listener attached');
+            } else {
+                console.error('[WEBVIEW] Send button not found!');
             }
             
             if (chatInput) {
@@ -1685,10 +1675,21 @@ class ChatProvider {
                     if (e.key === 'Enter' && !e.shiftKey) {
                         console.log('[WEBVIEW] Enter key pressed');
                         e.preventDefault();
+                        e.stopPropagation();
                         sendMessage();
                     }
                 });
-                console.log('[WEBVIEW] Chat input listener attached');
+                
+                chatInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        sendMessage();
+                    }
+                });
+                console.log('[WEBVIEW] Chat input listeners attached');
+            } else {
+                console.error('[WEBVIEW] Chat input not found!');
             }
 
             window.addEventListener('message', function(event) {
