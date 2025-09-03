@@ -78,23 +78,24 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             // Start typing indicator with faster response
             this.postMessage({ type: 'startTyping' });
 
-            // Get streaming response from Ollama with fast mode
+            // Get fast streaming response from Ollama
             let fullResponse = '';
             const startTime = Date.now();
             
+            // Use faster settings for immediate response
             const response = await this.ollamaClient.chat(
                 message, 
                 (token) => {
                     fullResponse += token;
                     
-                    // Send streaming tokens with ChatGPT-style effect
+                    // Send streaming tokens immediately for real-time typing effect
                     this.postMessage({
                         type: 'streamToken',
                         token: token,
                         fullMessage: fullResponse
                     });
                 },
-                true // includeContext parameter
+                true // includeContext parameter - optimized settings in OllamaClient
             );
             
             const responseTime = Date.now() - startTime;
@@ -523,7 +524,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     <div class="header">
         <div class="header-left">
             <div class="logo">R</div>
-            <span style="font-weight: 600;">Replit Copilot</span>
+            <span style="font-weight: 600;">Ollama Chat</span>
             <span id="status" style="font-size: 12px; color: #10b981;">⚡ Ready</span>
         </div>
         <button class="settings-btn" onclick="toggleSettings()">
@@ -555,7 +556,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     <div class="chat-container">
         <div class="messages" id="messages">
             <div class="welcome">
-                <h3>⚡ Replit Copilot</h3>
+                <h3>⚡ Ollama Chat</h3>
                 <p>Fast AI-powered coding assistant.<br>Ask me anything about code!</p>
             </div>
         </div>
@@ -597,6 +598,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             // Setup event listeners
             const chatInput = document.getElementById('chatInput');
             const sendBtn = document.getElementById('sendBtn');
+            const settingsBtn = document.querySelector('.settings-btn');
             
             if (chatInput && sendBtn) {
                 console.log('[WEBVIEW] Elements found, setting up event listeners');
@@ -614,6 +616,14 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 setTimeout(() => chatInput.focus(), 100);
             } else {
                 console.error('[WEBVIEW] Could not find chat elements!');
+            }
+            
+            // Setup settings button
+            if (settingsBtn) {
+                console.log('[WEBVIEW] Settings button found, adding event listener');
+                settingsBtn.addEventListener('click', toggleSettings);
+            } else {
+                console.error('[WEBVIEW] Could not find settings button!');
             }
             
             // Tell backend we're ready
@@ -686,7 +696,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 <div class="avatar assistant">R</div>
                 <div class="message-content">
                     <div class="typing">
-                        <span>Thinking</span>
+                        <span>⚡ Generating response</span>
                         <div class="typing-dots">
                             <div class="typing-dot"></div>
                             <div class="typing-dot"></div>
@@ -767,6 +777,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                     showTyping();
                     isThinking = true;
                     if (sendBtn) sendBtn.disabled = true;
+                    document.getElementById('status').textContent = '🤔 Thinking...';
                     break;
                     
                 case 'assistantMessage':
@@ -774,6 +785,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                     addMessage(message.formatted || message.message, false);
                     isThinking = false;
                     if (sendBtn) sendBtn.disabled = false;
+                    document.getElementById('status').textContent = '⚡ Ready';
                     break;
                     
                 case 'error':

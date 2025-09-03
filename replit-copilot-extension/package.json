@@ -1,7 +1,7 @@
 {
   "name": "replit-copilot-extension",
   "displayName": "Ollama Chat Extension",
-  "description": "A chat extension with MCP server and Ollama integration",
+  "description": "Fast Ollama Chat extension with MCP integration and VS Code workspace tools",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.74.0"

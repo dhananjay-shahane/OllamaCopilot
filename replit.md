@@ -1,4 +1,4 @@
-# Replit Copilot Extension
+# Ollama Chat Extension
 
 ## Overview
 A VS Code extension that mimics Copilot's UI and provides a step-by-step prompt experience for Replit. The extension integrates with MCP (Model Context Protocol) servers and supports local Ollama LLMs for file operations.

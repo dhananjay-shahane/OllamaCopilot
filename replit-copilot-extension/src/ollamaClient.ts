@@ -75,15 +75,18 @@ export class OllamaClient {
                 ],
                 stream: true, // Enable streaming for faster responses
                 options: {
-                    temperature: 0.7,
-                    top_p: 0.9,
-                    max_tokens: 2048
+                    temperature: 0.6,
+                    top_p: 0.8,
+                    max_tokens: 1024,
+                    num_predict: 512,
+                    top_k: 30,
+                    repeat_penalty: 1.1
                 }
             };
 
             const response = await axios.post(`${this.config.url}/api/chat`, payload, {
                 responseType: 'stream',
-                timeout: 60000
+                timeout: 30000
             });
 
             let assistantMessage = '';

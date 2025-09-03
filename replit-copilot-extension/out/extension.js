@@ -12,7 +12,7 @@ let mcpClient;
 let ollamaClient;
 let fileOpsManager;
 function activate(context) {
-    console.log('[REPLIT-COPILOT] Ollama Chat Extension is now active!');
+    console.log('[OLLAMA-CHAT] Ollama Chat Extension is now active!');
     try {
         // Initialize services
         mcpClient = new mcpClient_1.MCPClient();
@@ -20,14 +20,14 @@ function activate(context) {
         fileOpsManager = new fileOperations_1.FileOperationsManager();
         chatProvider = new chatProvider_1.ChatProvider(context.extensionUri, mcpClient, ollamaClient, fileOpsManager);
         // Register the webview provider
-        console.log('[REPLIT-COPILOT] Registering webview provider with ID:', chatProvider_1.ChatProvider.viewType);
+        console.log('[OLLAMA-CHAT] Registering webview provider with ID:', chatProvider_1.ChatProvider.viewType);
         const disposable = vscode.window.registerWebviewViewProvider(chatProvider_1.ChatProvider.viewType, chatProvider);
         context.subscriptions.push(disposable);
-        console.log('[REPLIT-COPILOT] Webview provider registered successfully');
+        console.log('[OLLAMA-CHAT] Webview provider registered successfully');
         vscode.window.showInformationMessage('Ollama Chat Extension loaded successfully!');
         // Register commands
         context.subscriptions.push(vscode.commands.registerCommand('replit-copilot.openChat', () => {
-            console.log('[REPLIT-COPILOT] Opening Ollama Chat...');
+            console.log('[OLLAMA-CHAT] Opening Ollama Chat...');
             vscode.commands.executeCommand('workbench.view.explorer');
             vscode.commands.executeCommand('replitCopilotChat.focus');
         }));
@@ -42,10 +42,10 @@ function activate(context) {
                 ollamaClient.updateConfiguration();
             }
         }));
-        console.log('[REPLIT-COPILOT] Extension activation completed successfully!');
+        console.log('[OLLAMA-CHAT] Extension activation completed successfully!');
     }
     catch (error) {
-        console.error('[REPLIT-COPILOT] Extension activation failed:', error);
+        console.error('[OLLAMA-CHAT] Extension activation failed:', error);
         vscode.window.showErrorMessage(`Ollama Chat Extension failed to activate: ${error}`);
     }
 }
