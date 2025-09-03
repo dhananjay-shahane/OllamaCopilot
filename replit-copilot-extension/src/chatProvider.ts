@@ -20,7 +20,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         context: vscode.WebviewViewResolveContext,
         _token: vscode.CancellationToken,
     ) {
-        console.log('🎯 Ollama Chat webview is being resolved');
+        console.log('[REPLIT-COPILOT] Ollama Chat webview is being resolved');
         this._view = webviewView;
 
         webviewView.webview.options = {
@@ -1180,20 +1180,20 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     <div class="chat-header">
         <div class="header-toolbar">
             <button class="tool-button" onclick="goBack()" title="Back">←</button>
-            <button class="tool-button" onclick="openFork()" title="Fork">🔀</button>
-            <button class="tool-button" onclick="openEdit()" title="Edit">✏️</button>
-            <button class="tool-button" onclick="openChat()" title="Chat">💬</button>
-            <button class="tool-button" onclick="openTools()" title="Tools">🔧</button>
-            <button class="tool-button" onclick="toggleMCP()" title="MCP">📡</button>
+            <button class="tool-button" onclick="openFork()" title="Fork">⑃</button>
+            <button class="tool-button" onclick="openEdit()" title="Edit">✎</button>
+            <button class="tool-button" onclick="openChat()" title="Chat">⚊</button>
+            <button class="tool-button" onclick="openTools()" title="Tools">⚙</button>
+            <button class="tool-button" onclick="toggleMCP()" title="MCP">⚏</button>
             <span class="header-spacer"></span>
-            <span class="agent-status">🟢 Local Agent</span>
-            <button class="settings-button" onclick="toggleSettings()" title="Settings">⚙️</button>
+            <span class="agent-status">● Local Agent</span>
+            <button class="settings-button" onclick="toggleSettings()" title="Settings">⚙</button>
         </div>
     </div>
 
     <div class="agent-selector">
         <div class="agent-info">
-            <span class="agent-icon">🤖</span>
+            <span class="agent-icon">◉</span>
             <span class="agent-name">Agent</span>
             <select id="agentModelSelect" class="agent-model-dropdown">
                 <option value="llama3.2:1b">Llama3.2 1B</option>
@@ -1205,7 +1205,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         </div>
         <div class="mcp-servers" id="mcpServersList" style="display: none;">
             <button class="add-mcp-button" onclick="showMCPModal()">
-                ➕ Add MCP Servers
+                + Add MCP Servers
             </button>
         </div>
     </div>
@@ -1213,7 +1213,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     <div class="settings-panel" id="settingsPanel" style="display: none;">
         <div class="settings-section">
             <label class="settings-label">
-                🤖 Ollama Model:
+                Model:
                 <select id="modelSelect" class="model-select">
                     <option value="llama3.2:1b">Llama-3.2:1b</option>
                     <option value="llama3.2:3b">Llama-3.2:3b</option>
@@ -1225,27 +1225,27 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         </div>
         <div class="settings-section">
             <label class="settings-label">
-                🔗 MCP Server URL:
+                MCP Server URL:
                 <input type="text" id="mcpServerUrl" class="settings-input" placeholder="ws://localhost:8080 or http://localhost:8080" />
             </label>
         </div>
         <div class="settings-section">
             <label class="settings-label">
-                🔑 MCP API Key (optional):
+                MCP API Key (optional):
                 <input type="password" id="mcpApiKey" class="settings-input" placeholder="Enter API key..." />
             </label>
         </div>
         <div class="settings-actions">
             <button class="action-button" onclick="saveSettings()">Save</button>
             <button class="action-button secondary" onclick="testConnection()">Test Connection</button>
-            <button class="action-button secondary" onclick="refreshModels()">🔄 Refresh Models</button>
+            <button class="action-button secondary" onclick="refreshModels()">↻ Refresh Models</button>
         </div>
     </div>
 
     <div class="chat-container" id="chatContainer">
         <div class="messages-wrapper" id="messagesWrapper">
             <div class="welcome-message">
-                <div class="welcome-title">👋 Welcome to Ollama Chat</div>
+                <div class="welcome-title">Welcome to Ollama Chat</div>
                 <div class="welcome-subtitle">
                     I can help you write code, debug issues, explain concepts, and work with your files using Ollama.
                     <br>Start by asking me a question or describing what you'd like to build.
@@ -1257,7 +1257,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     <div class="input-area">
         <div class="input-container">
             <div class="input-wrapper">
-                <button class="attach-button" onclick="attachFile()" title="Attach file">📎</button>
+                <button class="attach-button" onclick="attachFile()" title="Attach file">⚡</button>
                 <textarea 
                     id="chatInput" 
                     class="chat-input" 
@@ -1459,7 +1459,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 // Show confirmation
                 const saveBtn = event.target;
                 const originalText = saveBtn.textContent;
-                saveBtn.textContent = '✓ Saved';
+                saveBtn.textContent = '√ Saved';
                 setTimeout(() => {
                     saveBtn.textContent = originalText;
                 }, 2000);
