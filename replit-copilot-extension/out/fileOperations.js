@@ -110,7 +110,10 @@ class FileOperationsManager {
             }
             const rootUri = directoryPath
                 ? this.resolveUri(directoryPath)
-                : workspaceFolders[0].uri;
+                : workspaceFolders[0]?.uri;
+            if (!rootUri) {
+                throw new Error('No workspace folder available');
+            }
             const entries = await vscode.workspace.fs.readDirectory(rootUri);
             return entries
                 .filter(([name, type]) => type === vscode.FileType.File)
@@ -156,7 +159,11 @@ class FileOperationsManager {
             if (!workspaceFolders) {
                 return files.map(file => file.fsPath);
             }
-            const workspaceRoot = workspaceFolders[0].uri.fsPath;
+            const firstWorkspace = workspaceFolders[0];
+            if (!firstWorkspace) {
+                return files.map(file => file.fsPath);
+            }
+            const workspaceRoot = firstWorkspace.uri.fsPath;
             return files.map(file => {
                 const relativePath = vscode.workspace.asRelativePath(file);
                 return relativePath;
@@ -348,10 +355,14 @@ class FileOperationsManager {
             return vscode.Uri.file(filePath);
         }
         const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (!workspaceFolders) {
+        if (!workspaceFolders || workspaceFolders.length === 0) {
             throw new Error('No workspace folder open');
         }
-        return vscode.Uri.joinPath(workspaceFolders[0].uri, filePath);
+        const firstWorkspace = workspaceFolders[0];
+        if (!firstWorkspace) {
+            throw new Error('No workspace folder available');
+        }
+        return vscode.Uri.joinPath(firstWorkspace.uri, filePath);
     }
     log(message) {
         this.outputChannel.appendLine(`[${new Date().toISOString()}] ${message}`);
