@@ -10,7 +10,7 @@
     "Other"
   ],
   "activationEvents": [
-    "onStartupFinished"
+    "onView:replitCopilotChat"
   ],
   "main": "./out/extension.js",
   "contributes": {
