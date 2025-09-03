@@ -66,6 +66,9 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                     case 'attachFile':
                         await this.handleAttachFile();
                         break;
+                    case 'executeFileOperation':
+                        await this.handleFileOperation(message.operation, message.params);
+                        break;
                 }
             },
             undefined,
@@ -85,9 +88,26 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 type: 'startTyping'
             });
 
-            // Get streaming response from Ollama
+            // Analyze if the message contains file operation requests
+            const fileOperations = await this.parseFileOperationRequests(message);
+            let contextInfo = '';
+
+            // If user mentions specific files or operations, provide context
+            if (this.containsFileReferences(message)) {
+                try {
+                    const currentFile = await this.fileOpsManager.readCurrentlyOpenFile();
+                    if (currentFile) {
+                        contextInfo = `\n\nCURRENT CONTEXT:\n- Active file: ${currentFile.path}\n- File content preview: ${currentFile.content.slice(0, 500)}...`;
+                    }
+                } catch (e) {
+                    // Continue without context if there's an error
+                }
+            }
+
+            // Get streaming response from Ollama with context
             let fullResponse = '';
-            const response = await this.ollamaClient.chat(message, (token) => {
+            const enhancedMessage = message + contextInfo;
+            const response = await this.ollamaClient.chat(enhancedMessage, (token) => {
                 fullResponse += token;
                 this.postMessage({
                     type: 'streamToken',
@@ -95,6 +115,17 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                     fullMessage: fullResponse
                 });
             });
+            
+            // Execute any file operations suggested by the AI
+            if (fileOperations.length > 0) {
+                for (const operation of fileOperations) {
+                    try {
+                        await this.executeFileOperation(operation);
+                    } catch (error) {
+                        console.error('File operation error:', error);
+                    }
+                }
+            }
             
             // Final complete message
             this.postMessage({
@@ -315,6 +346,133 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             type: 'connectionTest',
             message: '📎 File attachment feature coming soon!'
         });
+    }
+
+    private async handleFileOperation(operation: string, params: any) {
+        try {
+            let result: any;
+            
+            switch (operation) {
+                case 'read_file':
+                    result = await this.fileOpsManager.readFile(params.path);
+                    break;
+                case 'create_new_file':
+                    await this.fileOpsManager.writeFile(params.path, params.content || '');
+                    result = `File created: ${params.path}`;
+                    break;
+                case 'edit_existing_file':
+                    await this.fileOpsManager.updateFileRange(params.path, params.range, params.content);
+                    result = `File edited: ${params.path}`;
+                    break;
+                case 'search_and_replace_in_file':
+                    result = await this.fileOpsManager.searchAndReplaceInFile(params.path, params.search, params.replace);
+                    break;
+                case 'ls':
+                    result = await this.fileOpsManager.listFiles(params.path);
+                    break;
+                case 'file_glob_search':
+                    result = await this.fileOpsManager.fileGlobSearch(params.pattern);
+                    break;
+                case 'grep_search':
+                    result = await this.fileOpsManager.grepSearch(params.term, params.pattern);
+                    break;
+                case 'run_terminal_command':
+                    result = await this.fileOpsManager.runTerminalCommand(params.command, params.cwd);
+                    break;
+                case 'view_diff':
+                    result = await this.fileOpsManager.viewDiff(params.file1, params.file2);
+                    break;
+                case 'view_repo_map':
+                    result = await this.fileOpsManager.viewRepoMap();
+                    break;
+                case 'view_subdirectory':
+                    result = await this.fileOpsManager.viewSubdirectory(params.path);
+                    break;
+                case 'read_currently_open_file':
+                    result = await this.fileOpsManager.readCurrentlyOpenFile();
+                    break;
+                case 'fetch_url_content':
+                    result = await this.fileOpsManager.fetchUrlContent(params.url);
+                    break;
+                case 'create_rule_block':
+                    result = await this.fileOpsManager.createRuleBlock(params.type, params.content);
+                    break;
+                default:
+                    throw new Error(`Unknown file operation: ${operation}`);
+            }
+            
+            this.postMessage({
+                type: 'fileOperationResult',
+                operation,
+                result
+            });
+        } catch (error) {
+            this.postMessage({
+                type: 'error',
+                message: `File operation failed (${operation}): ${error}`
+            });
+        }
+    }
+
+    private async parseFileOperationRequests(message: string): Promise<any[]> {
+        // Simple parsing for common file operation patterns
+        const operations = [];
+        
+        // Look for explicit operation requests
+        const patterns = [
+            { regex: /create file (\S+)/i, op: 'create_new_file' },
+            { regex: /read file (\S+)/i, op: 'read_file' },
+            { regex: /edit file (\S+)/i, op: 'edit_existing_file' },
+            { regex: /search for "([^"]+)"/i, op: 'grep_search' },
+            { regex: /list files in (\S+)/i, op: 'ls' },
+            { regex: /run command (.+)/i, op: 'run_terminal_command' }
+        ];
+        
+        for (const pattern of patterns) {
+            const match = message.match(pattern.regex);
+            if (match) {
+                operations.push({
+                    operation: pattern.op,
+                    params: this.extractParamsFromMatch(pattern.op, match)
+                });
+            }
+        }
+        
+        return operations;
+    }
+
+    private containsFileReferences(message: string): boolean {
+        // Check if message contains file-related keywords
+        const fileKeywords = [
+            'file', 'folder', 'directory', 'path', 'code', 'script',
+            'create', 'edit', 'read', 'write', 'delete', 'search',
+            'current file', 'this file', 'project', 'workspace'
+        ];
+        
+        return fileKeywords.some(keyword => 
+            message.toLowerCase().includes(keyword.toLowerCase())
+        );
+    }
+
+    private async executeFileOperation(operation: any) {
+        return await this.handleFileOperation(operation.operation, operation.params);
+    }
+
+    private extractParamsFromMatch(operation: string, match: RegExpMatchArray): any {
+        switch (operation) {
+            case 'create_new_file':
+            case 'read_file':
+            case 'edit_existing_file':
+                return { path: match[1] };
+            case 'grep_search':
+                return { term: match[1], pattern: '**/*' };
+            case 'ls':
+                return { path: match[1] };
+            case 'run_terminal_command':
+                return { command: match[1] };
+            default:
+                return {};
+        }
     }
 
     private postMessage(message: any) {
@@ -1530,6 +1688,9 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                         break;
                     case 'connectionTest':
                         addMessage(message.message, false);
+                        break;
+                    case 'fileOperationResult':
+                        addMessage('🔧 ' + message.operation + ': ' + JSON.stringify(message.result, null, 2), false);
                         break;
                 }
             });
