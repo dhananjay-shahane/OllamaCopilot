@@ -440,6 +440,7 @@ class ChatProvider {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
     <title>Ollama Chat</title>
     <style>
         :root {
@@ -1266,7 +1267,7 @@ class ChatProvider {
     </div>
 
     <script>
-        (function() {
+        try {
             console.log('[WEBVIEW] Starting webview initialization...');
             
             const vscode = acquireVsCodeApi();
@@ -1282,19 +1283,25 @@ class ChatProvider {
                 sendButton: !!sendButton
             });
             
+            let isThinking = false;
+            let currentStreamingMessage = null;
+            
+            if (!vscode) {
+                console.error('[WEBVIEW] VS Code API not available!');
+                return;
+            }
+            
             if (!chatInput || !sendButton) {
                 console.error('[WEBVIEW] Critical elements not found!');
                 return;
             }
             
-            let isThinking = false;
-            let currentStreamingMessage = null;
-
+            // Input auto-resize
             chatInput.addEventListener('input', function() {
                 this.style.height = 'auto';
                 this.style.height = Math.min(this.scrollHeight, 120) + 'px';
             });
-
+            
             function addMessage(content, isUser, timestamp = null) {
                 const welcomeMsg = document.querySelector('.welcome-message');
                 if (welcomeMsg && !isUser) {
@@ -1316,9 +1323,11 @@ class ChatProvider {
                 \`;
                 
                 messageDiv.innerHTML = messageContent;
-                messagesWrapper.appendChild(messageDiv);
-                scrollToBottom();
-            }
+                    if (messagesWrapper) {
+                        messagesWrapper.appendChild(messageDiv);
+                        scrollToBottom();
+                    }
+                }
 
             function showThinking() {
                 if (isThinking) return;
@@ -1691,8 +1700,15 @@ class ChatProvider {
                 }
             });
 
-            setTimeout(() => chatInput.focus(), 100);
-        })();
+            // Add global catch for any remaining errors
+            setTimeout(() => {
+                if (chatInput) chatInput.focus();
+                console.log('[WEBVIEW] Initialization fully complete!');
+            }, 100);
+        
+        } catch (error) {
+            console.error('[WEBVIEW] Script initialization error:', error);
+        }
     </script>
 </body>
 </html>`;

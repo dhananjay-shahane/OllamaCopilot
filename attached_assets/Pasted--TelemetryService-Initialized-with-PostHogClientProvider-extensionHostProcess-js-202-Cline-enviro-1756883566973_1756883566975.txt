@@ -1,0 +1,96 @@
+[TelemetryService] Initialized with PostHogClientProvider
+extensionHostProcess.js:202
+Cline environment: production
+extensionHostProcess.js:202
+Registered diff method: openDiff
+extensionHostProcess.js:202
+Registered diff method: getDocumentText
+extensionHostProcess.js:202
+Registered diff method: replaceText
+extensionHostProcess.js:202
+Registered diff method: scrollDiff
+extensionHostProcess.js:202
+Registered diff method: truncateDocument
+extensionHostProcess.js:202
+Registered diff method: saveDocument
+extensionHostProcess.js:202
+Registered diff method: closeAllDiffs
+extensionHostProcess.js:202
+Registered diff method: openMultiFileDiff
+extensionHostProcess.js:202
+Registered env method: clipboardWriteText
+extensionHostProcess.js:202
+Registered env method: clipboardReadText
+extensionHostProcess.js:202
+Registered env method: getMachineId
+extensionHostProcess.js:202
+Registered env method: getHostVersion
+extensionHostProcess.js:202
+Registered testing method: getWebviewHtml
+extensionHostProcess.js:202
+Registered watch method: subscribeToFile (streaming)
+extensionHostProcess.js:202
+Registered window method: showTextDocument
+extensionHostProcess.js:202
+Registered window method: showOpenDialogue
+extensionHostProcess.js:202
+Registered window method: showMessage
+extensionHostProcess.js:202
+Registered window method: showInputBox
+extensionHostProcess.js:202
+Registered window method: showSaveDialog
+extensionHostProcess.js:202
+Registered window method: openFile
+extensionHostProcess.js:202
+Registered window method: openSettings
+extensionHostProcess.js:202
+Registered window method: getOpenTabs
+extensionHostProcess.js:202
+Registered window method: getVisibleTabs
+extensionHostProcess.js:202
+Registered window method: getActiveEditor
+extensionHostProcess.js:202
+Registered workspace method: getWorkspacePaths
+extensionHostProcess.js:202
+Registered workspace method: saveOpenDocumentIfDirty
+extensionHostProcess.js:202
+Registered workspace method: getDiagnostics
+extensionHostProcess.js:202
+Registered workspace method: searchWorkspaceItems
+extensionHostProcess.js:202
+Registered workspace method: openProblemsPanel
+extensionHostProcess.js:202
+Registered workspace method: openInFileExplorerPanel
+extensionHostProcess.js:202
+(node:3760) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `Code --trace-deprecation ...` to show where the warning was created)
+extensionHostProcess.js:202
+[REPLIT-COPILOT] Ollama Chat Extension is now active!
+extensionHostProcess.js:202
+[REPLIT-COPILOT] Registering webview provider with ID: replitCopilotChat
+extensionHostProcess.js:202
+[REPLIT-COPILOT] Webview provider registered successfully
+extensionHostProcess.js:202
+[REPLIT-COPILOT] Extension activation completed successfully!
+extensionHostProcess.js:202
+Setting up vscode host providers...
+extensionHostProcess.js:202
+FileContextTracker: Processed 4 tasks, found 0 pending warnings, 0 orphaned, deleted 0, took 0ms
+extensionHostProcess.js:202
+Extension context was not provided to AuthService.getInstance, using default context
+extensionHostProcess.js:202
+[REPLIT-COPILOT] Ollama Chat webview is being resolved
+extensionHostProcess.js:202
+(node:3760) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+extensionHostProcess.js:202
+Failed to register Continue config.yaml schema, most likely, YAML extension is not installed CodeExpectedError: Unable to write to User Settings because yaml.schemas is not a registered configuration.
+    at e1t.z (vscode-file://vscode-app/c:/Users/Dhananjay/AppData/Local/Programs/Microsoft%20VS%20Code/resources/app/out/vs/workbench/workbench.desktop.main.js:3605:6793)
+    at e1t.F (vscode-file://vscode-app/c:/Users/Dhananjay/AppData/Local/Programs/Microsoft%20VS%20Code/resources/app/out/vs/workbench/workbench.desktop.main.js:3605:9281)
+    at e1t.o (vscode-file://vscode-app/c:/Users/Dhananjay/AppData/Local/Programs/Microsoft%20VS%20Code/resources/app/out/vs/workbench/workbench.desktop.main.js:3605:3874)
+    at Object.factory (vscode-file://vscode-app/c:/Users/Dhananjay/AppData/Local/Programs/Microsoft%20VS%20Code/resources/app/out/vs/workbench/workbench.desktop.main.js:3605:3774)
+    at Nv.j (vscode-file://vscode-app/c:/Users/Dhananjay/AppData/Local/Programs/Microsoft%20VS%20Code/resources/app/out/vs/workbench/workbench.desktop.main.js:30:75710)
+    at vscode-file://vscode-app/c:/Users/Dhananjay/AppData/Local/Programs/Microsoft%20VS%20Code/resources/app/out/vs/workbench/workbench.desktop.main.js:30:75622
+    at new Promise (<anonymous>)
+    at Nv.queue (vscode-file://vscode-app/c:/Users/Dhananjay/AppData/Local/Programs/Microsoft%20VS%20Code/resources/app/out/vs/workbench/workbench.desktop.main.js:30:75564)
+    at e1t.writeConfiguration (vscode-file://vscode-app/c:/Users/Dhananjay/AppData/Local/Programs/Microsoft%20VS%20Code/resources/app/out/vs/workbench/workbench.desktop.main.js:3605:3743)
+    at uhn.Hb (vscode-file://vscode-app/c:/Users/Dhananjay/AppData/Local/Programs/Microsoft%20VS%20Code/resources/app/out/vs/workbench/workbench.desktop.main.js:3605:42740) {name: 'CodeExpectedError', message: 'Unable to write to User Settings because yaml.schemas is not a registered configuration.', stack: 'CodeExpectedError: Unable to write to User Se…rkbench/workbench.desktop.main.js:3605:42740)'}
