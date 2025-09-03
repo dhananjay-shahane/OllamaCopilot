@@ -5,7 +5,7 @@ const vscode = require("vscode");
 const axios_1 = require("axios");
 class OllamaClient {
     constructor() {
-        this.config = { url: 'http://localhost:11434', model: 'llama3.2' };
+        this.config = { url: 'http://localhost:11434', model: 'llama3.2:1b' };
         this.conversationHistory = [];
         this.updateConfiguration();
     }
@@ -13,7 +13,7 @@ class OllamaClient {
         const config = vscode.workspace.getConfiguration('replitCopilot');
         this.config = {
             url: config.get('ollamaUrl') || 'http://localhost:11434',
-            model: config.get('defaultModel') || 'llama3.2',
+            model: config.get('defaultModel') || 'llama3.2:1b',
             systemMessage: config.get('systemMessage') || 'You are a helpful coding assistant for Replit. You can help with file operations, code explanations, and development tasks.'
         };
         // Add system message to conversation history if not present

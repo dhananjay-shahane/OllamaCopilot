@@ -60,8 +60,13 @@
         },
         "replitCopilot.defaultModel": {
           "type": "string",
-          "default": "llama3.2",
+          "default": "llama3.2:1b",
           "description": "Default Ollama model to use"
+        },
+        "replitCopilot.mcpApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "MCP Server API Key (optional)"
         }
       }
     }

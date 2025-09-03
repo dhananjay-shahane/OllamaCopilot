@@ -45,6 +45,18 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                     case 'previewFile':
                         await this.handlePreviewFile(message.filePath);
                         break;
+                    case 'getSettings':
+                        await this.handleGetSettings();
+                        break;
+                    case 'saveSettings':
+                        await this.handleSaveSettings(message.settings);
+                        break;
+                    case 'testConnection':
+                        await this.handleTestConnection();
+                        break;
+                    case 'refreshModels':
+                        await this.handleRefreshModels();
+                        break;
                 }
             },
             undefined,
@@ -138,6 +150,72 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         }
         
         return suggestions;
+    }
+
+    private async handleGetSettings() {
+        const config = vscode.workspace.getConfiguration('replitCopilot');
+        this.postMessage({
+            type: 'settingsLoaded',
+            settings: {
+                model: config.get<string>('defaultModel') || 'llama3.2:1b',
+                mcpServerUrl: config.get<string>('mcpServerUrl') || '',
+                mcpApiKey: config.get<string>('mcpApiKey') || ''
+            }
+        });
+    }
+
+    private async handleSaveSettings(settings: any) {
+        try {
+            const config = vscode.workspace.getConfiguration('replitCopilot');
+            await config.update('defaultModel', settings.model, vscode.ConfigurationTarget.Global);
+            await config.update('mcpServerUrl', settings.mcpServerUrl, vscode.ConfigurationTarget.Global);
+            await config.update('mcpApiKey', settings.mcpApiKey, vscode.ConfigurationTarget.Global);
+            
+            // Update clients with new configuration
+            this.ollamaClient.updateConfiguration();
+            this.mcpClient.updateConfiguration();
+        } catch (error) {
+            this.postMessage({
+                type: 'error',
+                message: `Failed to save settings: ${error}`
+            });
+        }
+    }
+
+    private async handleTestConnection() {
+        try {
+            const ollamaAvailable = await this.ollamaClient.isAvailable();
+            const mcpConnected = await this.mcpClient.connect();
+            
+            let message = '🔍 Connection Test Results:\n\n';
+            message += `🤖 Ollama: ${ollamaAvailable ? '✅ Connected' : '❌ Not available'}\n`;
+            message += `🔗 MCP Server: ${mcpConnected ? '✅ Connected' : '❌ Not connected'}`;
+            
+            this.postMessage({
+                type: 'connectionTest',
+                message: message
+            });
+        } catch (error) {
+            this.postMessage({
+                type: 'error',
+                message: `Connection test failed: ${error}`
+            });
+        }
+    }
+
+    private async handleRefreshModels() {
+        try {
+            const models = await this.ollamaClient.getModels();
+            this.postMessage({
+                type: 'modelsRefreshed',
+                models: models.length > 0 ? models : ['llama3.2:1b', 'llama3.2:3b', 'llama3.2', 'llama3.1', 'codellama']
+            });
+        } catch (error) {
+            this.postMessage({
+                type: 'error',
+                message: `Failed to refresh models: ${error}`
+            });
+        }
     }
 
     private postMessage(message: any) {
@@ -454,6 +532,93 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         .chat-container::-webkit-scrollbar-thumb:hover {
             background: var(--vscode-scrollbarSlider-hoverBackground);
         }
+
+        .settings-button {
+            margin-left: auto;
+            background: transparent;
+            border: none;
+            color: var(--copilot-text);
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+
+        .settings-button:hover {
+            background: var(--copilot-input-bg);
+        }
+
+        .settings-panel {
+            background: var(--copilot-bg);
+            border-bottom: 1px solid var(--copilot-border);
+            padding: 16px;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; max-height: 0; }
+            to { opacity: 1; max-height: 300px; }
+        }
+
+        .settings-section {
+            margin-bottom: 16px;
+        }
+
+        .settings-label {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--copilot-text);
+        }
+
+        .model-select, .settings-input {
+            padding: 8px 12px;
+            border: 1px solid var(--copilot-input-border);
+            border-radius: 4px;
+            background: var(--copilot-input-bg);
+            color: var(--copilot-text);
+            font-size: 12px;
+            width: 100%;
+        }
+
+        .model-select:focus, .settings-input:focus {
+            outline: none;
+            border-color: var(--copilot-primary);
+        }
+
+        .settings-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .action-button {
+            padding: 6px 12px;
+            border: 1px solid var(--copilot-primary);
+            border-radius: 4px;
+            background: var(--copilot-primary);
+            color: white;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .action-button:hover {
+            background: var(--copilot-primary-hover);
+        }
+
+        .action-button.secondary {
+            background: transparent;
+            color: var(--copilot-primary);
+        }
+
+        .action-button.secondary:hover {
+            background: var(--copilot-primary);
+            color: white;
+        }
     </style>
 </head>
 <body>
@@ -461,8 +626,43 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         <div class="chat-title">
             <div class="copilot-icon">O</div>
             Ollama Chat
+            <button class="settings-button" onclick="toggleSettings()" title="Settings">
+                ⚙️
+            </button>
         </div>
         <div class="chat-subtitle">AI assistant powered by Ollama</div>
+    </div>
+
+    <div class="settings-panel" id="settingsPanel" style="display: none;">
+        <div class="settings-section">
+            <label class="settings-label">
+                🤖 Ollama Model:
+                <select id="modelSelect" class="model-select">
+                    <option value="llama3.2:1b">Llama-3.2:1b</option>
+                    <option value="llama3.2:3b">Llama-3.2:3b</option>
+                    <option value="llama3.2">Llama-3.2</option>
+                    <option value="llama3.1">Llama-3.1</option>
+                    <option value="codellama">CodeLlama</option>
+                </select>
+            </label>
+        </div>
+        <div class="settings-section">
+            <label class="settings-label">
+                🔗 MCP Server URL:
+                <input type="text" id="mcpServerUrl" class="settings-input" placeholder="ws://localhost:8080 or http://localhost:8080" />
+            </label>
+        </div>
+        <div class="settings-section">
+            <label class="settings-label">
+                🔑 MCP API Key (optional):
+                <input type="password" id="mcpApiKey" class="settings-input" placeholder="Enter API key..." />
+            </label>
+        </div>
+        <div class="settings-actions">
+            <button class="action-button" onclick="saveSettings()">Save</button>
+            <button class="action-button secondary" onclick="testConnection()">Test Connection</button>
+            <button class="action-button secondary" onclick="refreshModels()">🔄 Refresh Models</button>
+        </div>
     </div>
 
     <div class="chat-container" id="chatContainer">
@@ -598,7 +798,63 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                 chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px';
             }
 
+            // Settings functions
+            function toggleSettings() {
+                const panel = document.getElementById('settingsPanel');
+                panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+                
+                if (panel.style.display === 'block') {
+                    loadCurrentSettings();
+                }
+            }
+
+            function loadCurrentSettings() {
+                vscode.postMessage({
+                    type: 'getSettings'
+                });
+            }
+
+            function saveSettings() {
+                const modelSelect = document.getElementById('modelSelect');
+                const mcpServerUrl = document.getElementById('mcpServerUrl');
+                const mcpApiKey = document.getElementById('mcpApiKey');
+
+                vscode.postMessage({
+                    type: 'saveSettings',
+                    settings: {
+                        model: modelSelect.value,
+                        mcpServerUrl: mcpServerUrl.value,
+                        mcpApiKey: mcpApiKey.value
+                    }
+                });
+
+                // Show confirmation
+                const saveBtn = event.target;
+                const originalText = saveBtn.textContent;
+                saveBtn.textContent = '✓ Saved';
+                setTimeout(() => {
+                    saveBtn.textContent = originalText;
+                }, 2000);
+            }
+
+            function testConnection() {
+                vscode.postMessage({
+                    type: 'testConnection'
+                });
+            }
+
+            function refreshModels() {
+                vscode.postMessage({
+                    type: 'refreshModels'
+                });
+            }
+
+            // Make functions global
             window.insertSuggestion = insertSuggestion;
+            window.toggleSettings = toggleSettings;
+            window.saveSettings = saveSettings;
+            window.testConnection = testConnection;
+            window.refreshModels = refreshModels;
 
             sendButton.addEventListener('click', sendMessage);
             
@@ -620,6 +876,28 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                         break;
                     case 'error':
                         addMessage('❌ ' + message.message, false);
+                        break;
+                    case 'settingsLoaded':
+                        document.getElementById('modelSelect').value = message.settings.model || 'llama3.2:1b';
+                        document.getElementById('mcpServerUrl').value = message.settings.mcpServerUrl || '';
+                        document.getElementById('mcpApiKey').value = message.settings.mcpApiKey || '';
+                        break;
+                    case 'modelsRefreshed':
+                        const modelSelect = document.getElementById('modelSelect');
+                        const currentValue = modelSelect.value;
+                        modelSelect.innerHTML = '';
+                        message.models.forEach(model => {
+                            const option = document.createElement('option');
+                            option.value = model;
+                            option.textContent = model;
+                            modelSelect.appendChild(option);
+                        });
+                        if (message.models.includes(currentValue)) {
+                            modelSelect.value = currentValue;
+                        }
+                        break;
+                    case 'connectionTest':
+                        addMessage(message.message, false);
                         break;
                 }
             });
