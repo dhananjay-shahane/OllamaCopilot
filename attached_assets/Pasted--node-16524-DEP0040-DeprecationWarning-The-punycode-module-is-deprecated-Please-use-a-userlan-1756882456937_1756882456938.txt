@@ -1,0 +1,38 @@
+(node:16524) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `Code --trace-deprecation ...` to show where the warning was created)
+extensionHostProcess.js:202
+🚀 Ollama Chat Extension is now active!
+extensionHostProcess.js:202
+📝 Registering webview provider with ID: replitCopilotChat
+extensionHostProcess.js:202
+✅ Webview provider registered successfully
+extensionHostProcess.js:202
+🎉 Extension activation completed successfully!
+extensionHostProcess.js:202
+Setting up vscode host providers...
+extensionHostProcess.js:202
+FileContextTracker: Processed 4 tasks, found 0 pending warnings, 0 orphaned, deleted 0, took 0ms
+extensionHostProcess.js:202
+Extension context was not provided to AuthService.getInstance, using default context
+extensionHostProcess.js:202
+🎯 Ollama Chat webview is being resolved
+extensionHostProcess.js:202
+(node:16524) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+extensionHostProcess.js:202
+Firebase restore token error pV {code: 'ECONNRESET', message: 'socket hang up', name: 'Error', config: {…}, request: mC, …}
+extensionHostProcess.js:202
+[ErrorService] Logging pV {code: 'ECONNRESET', message: 'socket hang up', name: 'Error', config: {…}, request: mC, …}
+extensionHostProcess.js:202
+Error restoring auth token: pV {code: 'ECONNRESET', message: 'socket hang up', name: 'Error', config: {…}, request: mC, …}
+extensionHostProcess.js:202
+Failed to register Continue config.yaml schema, most likely, YAML extension is not installed CodeExpectedError: Unable to write to User Settings because yaml.schemas is not a registered configuration.
+    at e1t.z (vscode-file://vscode-app/c:/Users/Dhananjay/AppData/Local/Programs/Microsoft%20VS%20Code/resources/app/out/vs/workbench/workbench.desktop.main.js:3605:6793)
+    at e1t.F (vscode-file://vscode-app/c:/Users/Dhananjay/AppData/Local/Programs/Microsoft%20VS%20Code/resources/app/out/vs/workbench/workbench.desktop.main.js:3605:9281)
+    at e1t.o (vscode-file://vscode-app/c:/Users/Dhananjay/AppData/Local/Programs/Microsoft%20VS%20Code/resources/app/out/vs/workbench/workbench.desktop.main.js:3605:3874)
+    at Object.factory (vscode-file://vscode-app/c:/Users/Dhananjay/AppData/Local/Programs/Microsoft%20VS%20Code/resources/app/out/vs/workbench/workbench.desktop.main.js:3605:3774)
+    at Nv.j (vscode-file://vscode-app/c:/Users/Dhananjay/AppData/Local/Programs/Microsoft%20VS%20Code/resources/app/out/vs/workbench/workbench.desktop.main.js:30:75710)
+    at vscode-file://vscode-app/c:/Users/Dhananjay/AppData/Local/Programs/Microsoft%20VS%20Code/resources/app/out/vs/workbench/workbench.desktop.main.js:30:75622
+    at new Promise (<anonymous>)
+    at Nv.queue (vscode-file://vscode-app/c:/Users/Dhananjay/AppData/Local/Programs/Microsoft%20VS%20Code/resources/app/out/vs/workbench/workbench.desktop.main.js:30:75564)
+    at e1t.writeConfiguration (vscode-file://vscode-app/c:/Users/Dhananjay/AppData/Local/Programs/Microsoft%20VS%20Code/resources/app/out/vs/workbench/workbench.desktop.main.js:3605:3743)
+    at uhn.Hb (vscode-file://vscode-app/c:/Users/Dhananjay/AppData/Local/Programs/Microsoft%20VS%20Code/resources/app/out/vs/workbench/workbench.desktop.main.js:3605:42740) {name: 'CodeExpectedError', message: 'Unable to write to User Settings because yaml.schemas is not a registered configuration.', stack: 'CodeExpectedError: Unable to write to User Se…rkbench/workbench.desktop.main.js:3605:42740)'}
