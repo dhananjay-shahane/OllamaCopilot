@@ -23,6 +23,9 @@ class ChatProvider {
         webviewView.webview.onDidReceiveMessage(async (message) => {
             console.log('[REPLIT-COPILOT] Backend received message:', message);
             switch (message.type) {
+                case 'ready':
+                    console.log('[REPLIT-COPILOT] Webview is ready and JavaScript is working!');
+                    break;
                 case 'sendMessage':
                     console.log('[REPLIT-COPILOT] Handling chat message:', message.text);
                     await this.handleChatMessage(message.text);
@@ -38,6 +41,9 @@ class ChatProvider {
                     break;
                 case 'refreshModels':
                     await this.handleRefreshModels();
+                    break;
+                case 'debug':
+                    console.log('[REPLIT-COPILOT] Debug from webview:', message.data);
                     break;
             }
         }, undefined, []);
@@ -149,14 +155,14 @@ class ChatProvider {
     formatMessage(message) {
         // Format code blocks
         let formatted = message.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, language, code) => {
-            return `<pre class="bg-gray-800 text-green-400 p-3 rounded-lg overflow-x-auto"><code class="language-${language || 'text'}">${this.escapeHtml(code.trim())}</code></pre>`;
+            return `<pre style="background: #1e293b; color: #10b981; padding: 12px; border-radius: 6px; overflow-x: auto; margin: 8px 0;"><code>${this.escapeHtml(code.trim())}</code></pre>`;
         });
         // Format inline code
-        formatted = formatted.replace(/`([^`]+)`/g, '<code class="bg-gray-200 px-1 rounded text-sm">$1</code>');
+        formatted = formatted.replace(/`([^`]+)`/g, '<code style="background: #e5e7eb; color: #374151; padding: 2px 4px; border-radius: 3px; font-size: 0.9em;">$1</code>');
         // Format bold text
-        formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold">$1</strong>');
+        formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong style="font-weight: 600;">$1</strong>');
         // Format italic text
-        formatted = formatted.replace(/\*(.*?)\*/g, '<em class="italic">$1</em>');
+        formatted = formatted.replace(/\*(.*?)\*/g, '<em style="font-style: italic;">$1</em>');
         // Convert line breaks
         formatted = formatted.replace(/\n/g, '<br>');
         return formatted;
@@ -175,35 +181,294 @@ class ChatProvider {
         }
     }
     _getHtmlForWebview(webview) {
+        // Get proper nonce for security
+        const nonce = getNonce();
         return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}' ${webview.cspSource};">
     <title>Replit Copilot Chat</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        'vscode-bg': 'var(--vscode-sideBar-background)',
-                        'vscode-text': 'var(--vscode-foreground)',
-                        'vscode-border': 'var(--vscode-panel-border)',
-                        'vscode-input': 'var(--vscode-input-background)',
-                        'vscode-button': 'var(--vscode-button-background)',
-                    }
-                }
-            }
-        }
-    </script>
     <style>
-        :root {
-            --copilot-primary: #0969da;
-            --copilot-primary-hover: #0860ca;
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
         }
         
-        .typing-cursor {
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: #0f172a;
+            color: #f8fafc;
+            font-size: 14px;
+        }
+        
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px;
+            border-bottom: 1px solid #374151;
+            background: #1e293b;
+        }
+        
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .logo {
+            width: 16px;
+            height: 16px;
+            background: linear-gradient(45deg, #3b82f6, #1d4ed8);
+            border-radius: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 10px;
+        }
+        
+        .settings-btn {
+            padding: 8px;
+            background: none;
+            border: none;
+            color: #f8fafc;
+            cursor: pointer;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+        
+        .settings-btn:hover {
+            background: #374151;
+        }
+        
+        .settings-panel {
+            background: #1e293b;
+            border-bottom: 1px solid #374151;
+            padding: 16px;
+            display: none;
+        }
+        
+        .settings-panel.visible {
+            display: block;
+        }
+        
+        .form-group {
+            margin-bottom: 12px;
+        }
+        
+        .form-label {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            color: #d1d5db;
+        }
+        
+        .form-input, .form-select {
+            width: 100%;
+            padding: 8px 12px;
+            background: #374151;
+            border: 1px solid #4b5563;
+            border-radius: 6px;
+            color: #f8fafc;
+            font-size: 14px;
+        }
+        
+        .form-input:focus, .form-select:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-right: 8px;
+            margin-bottom: 8px;
+        }
+        
+        .btn-primary { background: #3b82f6; color: white; }
+        .btn-primary:hover { background: #2563eb; }
+        
+        .btn-success { background: #10b981; color: white; }
+        .btn-success:hover { background: #059669; }
+        
+        .btn-warning { background: #f59e0b; color: white; }
+        .btn-warning:hover { background: #d97706; }
+        
+        .chat-container {
+            flex: 1;
+            overflow-y: auto;
+            background: #0f172a;
+        }
+        
+        .messages {
+            padding: 16px;
+            min-height: 100%;
+        }
+        
+        .welcome {
+            text-align: center;
+            color: #6b7280;
+            margin-bottom: 24px;
+        }
+        
+        .welcome h3 {
+            color: #3b82f6;
+            margin-bottom: 8px;
+            font-size: 18px;
+        }
+        
+        .message {
+            display: flex;
+            margin-bottom: 16px;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        .message.user {
+            flex-direction: row-reverse;
+            margin-left: 32px;
+        }
+        
+        .message.assistant {
+            margin-right: 32px;
+        }
+        
+        .avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 12px;
+            margin: 0 12px;
+        }
+        
+        .avatar.user {
+            background: #059669;
+        }
+        
+        .avatar.assistant {
+            background: #3b82f6;
+        }
+        
+        .message-content {
+            flex: 1;
+            padding: 12px;
+            border-radius: 12px;
+            word-wrap: break-word;
+        }
+        
+        .message.user .message-content {
+            background: #064e3b;
+        }
+        
+        .message.assistant .message-content {
+            background: #1e293b;
+        }
+        
+        .input-area {
+            border-top: 1px solid #374151;
+            background: #1e293b;
+            padding: 16px;
+        }
+        
+        .input-row {
+            display: flex;
+            align-items: flex-end;
+            gap: 12px;
+        }
+        
+        .input-wrapper {
+            flex: 1;
+        }
+        
+        .chat-input {
+            width: 100%;
+            min-height: 40px;
+            max-height: 120px;
+            padding: 12px;
+            background: #374151;
+            border: 1px solid #4b5563;
+            border-radius: 12px;
+            color: #f8fafc;
+            resize: none;
+            font-family: inherit;
+            font-size: 14px;
+        }
+        
+        .chat-input:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+        
+        .send-btn {
+            padding: 12px 24px;
+            background: #3b82f6;
+            border: none;
+            border-radius: 12px;
+            color: white;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .send-btn:hover:not(:disabled) {
+            background: #2563eb;
+        }
+        
+        .send-btn:disabled {
+            background: #4b5563;
+            cursor: not-allowed;
+        }
+        
+        .typing {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #6b7280;
+        }
+        
+        .typing-dots {
+            display: flex;
+            gap: 2px;
+        }
+        
+        .typing-dot {
+            width: 4px;
+            height: 4px;
+            background: #6b7280;
+            border-radius: 50%;
+            animation: bounce 1.5s infinite;
+        }
+        
+        .typing-dot:nth-child(2) { animation-delay: 0.1s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.2s; }
+        
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        @keyframes bounce {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-6px); }
+        }
+        
+        .cursor {
             animation: blink 1s infinite;
         }
         
@@ -211,159 +476,112 @@ class ChatProvider {
             0%, 50% { opacity: 1; }
             51%, 100% { opacity: 0; }
         }
-        
-        .message-slide-in {
-            animation: slideIn 0.3s ease-out;
-        }
-        
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        .typing-dots {
-            animation: pulse 1.5s infinite;
-        }
     </style>
 </head>
-<body class="h-screen bg-gray-900 text-white flex flex-col font-mono text-sm">
-    <!-- Header with Settings -->
-    <div class="flex items-center justify-between p-4 border-b border-gray-700 bg-gray-800">
-        <div class="flex items-center space-x-2">
-            <div class="w-4 h-4 bg-gradient-to-r from-blue-500 to-blue-600 rounded-sm flex items-center justify-center text-white text-xs font-bold">R</div>
-            <span class="font-semibold">Replit Copilot</span>
-            <span class="text-xs text-green-400" id="statusIndicator">⚡ Fast Mode</span>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="header-left">
+            <div class="logo">R</div>
+            <span style="font-weight: 600;">Replit Copilot</span>
+            <span id="status" style="font-size: 12px; color: #10b981;">⚡ Ready</span>
         </div>
-        <button onclick="toggleSettings()" class="p-2 hover:bg-gray-700 rounded-md transition-colors duration-200">
-            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+        <button class="settings-btn" onclick="toggleSettings()">
+            <svg width="16" height="16" fill="currentColor" viewBox="0 0 20 20">
                 <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"></path>
             </svg>
         </button>
     </div>
 
     <!-- Settings Panel -->
-    <div id="settingsPanel" class="hidden bg-gray-800 border-b border-gray-700 p-4 space-y-4">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <!-- Model Selection -->
-            <div class="space-y-2">
-                <label class="block text-sm font-medium text-gray-300">Model</label>
-                <select id="modelSelect" class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="llama3.2:1b">Llama-3.2:1b (Fast)</option>
-                    <option value="llama3.2:3b">Llama-3.2:3b</option>
-                    <option value="llama3.2">Llama-3.2</option>
-                    <option value="llama3.1">Llama-3.1</option>
-                    <option value="codellama">CodeLlama</option>
-                </select>
-            </div>
-
-            <!-- MCP Connection Type -->
-            <div class="space-y-2">
-                <label class="block text-sm font-medium text-gray-300">MCP Connection</label>
-                <select id="mcpConnectionType" onchange="updateMcpSettings()" class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="stdio">STDIO (Fastest)</option>
-                    <option value="http">HTTP Server</option>
-                    <option value="websocket">WebSocket</option>
-                </select>
-            </div>
+    <div id="settingsPanel" class="settings-panel">
+        <div class="form-group">
+            <label class="form-label">Model</label>
+            <select id="modelSelect" class="form-select">
+                <option value="llama3.2:1b">Llama-3.2:1b (Fast)</option>
+                <option value="llama3.2:3b">Llama-3.2:3b</option>
+                <option value="codellama">CodeLlama</option>
+            </select>
         </div>
-
-        <!-- STDIO Configuration -->
-        <div id="mcpStdioSection" class="space-y-3 bg-gray-700 p-3 rounded-lg">
-            <h4 class="text-sm font-medium text-blue-400">STDIO Configuration</h4>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                    <label class="block text-xs text-gray-300 mb-1">Command</label>
-                    <input type="text" id="mcpStdioCommand" value="node" class="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500">
-                </div>
-                <div>
-                    <label class="block text-xs text-gray-300 mb-1">Timeout (ms)</label>
-                    <input type="number" id="mcpTimeout" value="2000" min="1000" max="10000" class="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500">
-                </div>
-            </div>
-            <div>
-                <label class="block text-xs text-gray-300 mb-1">Args (JSON Array)</label>
-                <textarea id="mcpStdioArgs" rows="2" class="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500">[\"-e\", \"console.log('MCP Ready'); process.stdin.pipe(process.stdout);\"]</textarea>
-            </div>
-        </div>
-
-        <!-- Server Configuration (Hidden by default) -->
-        <div id="mcpServerSection" class="hidden space-y-3 bg-gray-700 p-3 rounded-lg">
-            <h4 class="text-sm font-medium text-blue-400">Server Configuration</h4>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                    <label class="block text-xs text-gray-300 mb-1">Server URL</label>
-                    <input type="text" id="mcpServerUrl" placeholder="ws://localhost:8080" class="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500">
-                </div>
-                <div>
-                    <label class="block text-xs text-gray-300 mb-1">API Key</label>
-                    <input type="password" id="mcpApiKey" placeholder="Optional..." class="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500">
-                </div>
-            </div>
-        </div>
-
-        <!-- Feature Toggles -->
-        <div class="flex flex-wrap gap-4">
-            <label class="flex items-center space-x-2 text-sm">
-                <input type="checkbox" id="enableStreaming" checked class="rounded bg-gray-700 border-gray-600 text-blue-500 focus:ring-blue-500">
-                <span class="text-gray-300">ChatGPT-style streaming</span>
-            </label>
-            <label class="flex items-center space-x-2 text-sm">
-                <input type="checkbox" id="enableFastMode" checked class="rounded bg-gray-700 border-gray-600 text-blue-500 focus:ring-blue-500">
-                <span class="text-gray-300">Fast mode (2s timeouts)</span>
-            </label>
-        </div>
-
-        <!-- Action Buttons -->
-        <div class="flex flex-wrap gap-2">
-            <button onclick="saveSettings()" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm font-medium transition-colors duration-200">💾 Save</button>
-            <button onclick="testConnection()" class="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-sm font-medium transition-colors duration-200">🔍 Test</button>
-            <button onclick="refreshModels()" class="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 rounded text-sm font-medium transition-colors duration-200">↻ Refresh</button>
-            <button onclick="resetToDefaults()" class="px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded text-sm font-medium transition-colors duration-200">🔄 Reset</button>
+        
+        <div style="margin: 16px 0;">
+            <button class="btn btn-primary" onclick="saveSettings()">💾 Save</button>
+            <button class="btn btn-success" onclick="testConnection()">🔍 Test</button>
+            <button class="btn btn-warning" onclick="refreshModels()">↻ Refresh</button>
         </div>
     </div>
 
     <!-- Chat Container -->
-    <div id="chatContainer" class="flex-1 overflow-y-auto bg-gray-900">
-        <div id="messagesWrapper" class="p-4 space-y-4 min-h-full">
-            <div class="text-center text-gray-400 text-sm message-slide-in">
-                <div class="text-lg font-semibold text-blue-400 mb-2">⚡ Replit Copilot</div>
-                <div>Fast AI-powered coding assistant with MCP STDIO integration.<br>Ask me anything about code, and I'll respond quickly!</div>
+    <div class="chat-container">
+        <div class="messages" id="messages">
+            <div class="welcome">
+                <h3>⚡ Replit Copilot</h3>
+                <p>Fast AI-powered coding assistant.<br>Ask me anything about code!</p>
             </div>
         </div>
     </div>
 
     <!-- Input Area -->
-    <div class="border-t border-gray-700 bg-gray-800 p-4">
-        <div class="flex items-end space-x-3">
-            <div class="flex-1 relative">
+    <div class="input-area">
+        <div class="input-row">
+            <div class="input-wrapper">
                 <textarea 
                     id="chatInput" 
-                    placeholder="Ask about code, debugging, or anything..." 
+                    class="chat-input"
+                    placeholder="Ask about code, debugging, or anything..."
                     rows="1"
-                    class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    onkeydown="handleKeyPress(event)"
                 ></textarea>
             </div>
-            <button 
-                id="sendButton" 
-                onclick="sendMessage()" 
-                class="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-medium transition-colors duration-200"
-            >
-                Send
-            </button>
+            <button id="sendBtn" class="send-btn">Send</button>
         </div>
     </div>
 
-    <script>
-        const vscode = acquireVsCodeApi();
+    <script nonce="${nonce}">
+        console.log('[WEBVIEW] Script starting...');
+        
+        let vscode;
+        try {
+            vscode = acquireVsCodeApi();
+            console.log('[WEBVIEW] VS Code API acquired successfully');
+        } catch (error) {
+            console.error('[WEBVIEW] Failed to acquire VS Code API:', error);
+        }
+
         let isThinking = false;
-        let currentStreamingMessage = null;
+        let currentMessage = null;
+
+        // Initialize the extension
+        function init() {
+            console.log('[WEBVIEW] Initializing...');
+            
+            // Setup event listeners
+            const chatInput = document.getElementById('chatInput');
+            const sendBtn = document.getElementById('sendBtn');
+            
+            if (chatInput && sendBtn) {
+                console.log('[WEBVIEW] Elements found, setting up event listeners');
+                
+                chatInput.addEventListener('keydown', handleKeyPress);
+                sendBtn.addEventListener('click', sendMessage);
+                
+                // Auto-resize textarea
+                chatInput.addEventListener('input', function() {
+                    this.style.height = 'auto';
+                    this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+                });
+                
+                // Focus input
+                setTimeout(() => chatInput.focus(), 100);
+            } else {
+                console.error('[WEBVIEW] Could not find chat elements!');
+            }
+            
+            // Tell backend we're ready
+            if (vscode) {
+                vscode.postMessage({ type: 'ready' });
+                vscode.postMessage({ type: 'getSettings' });
+            }
+        }
 
         function handleKeyPress(event) {
             if (event.key === 'Enter' && !event.shiftKey) {
@@ -373,266 +591,202 @@ class ChatProvider {
         }
 
         function sendMessage() {
+            console.log('[WEBVIEW] Send message clicked');
+            
             const input = document.getElementById('chatInput');
             const message = input.value.trim();
             
-            if (!message || isThinking) return;
+            if (!message || isThinking) {
+                console.log('[WEBVIEW] No message or thinking, skipping');
+                return;
+            }
+            
+            console.log('[WEBVIEW] Sending message:', message);
             
             input.value = '';
             input.style.height = 'auto';
             
-            vscode.postMessage({
-                type: 'sendMessage',
-                text: message
-            });
+            // Add user message immediately
+            addMessage(message, true);
+            
+            if (vscode) {
+                vscode.postMessage({
+                    type: 'sendMessage',
+                    text: message
+                });
+            } else {
+                console.error('[WEBVIEW] VS Code API not available!');
+            }
         }
 
         function addMessage(content, isUser, timestamp = null) {
-            const wrapper = document.getElementById('messagesWrapper');
+            console.log('[WEBVIEW] Adding message:', content, 'isUser:', isUser);
+            
+            const messages = document.getElementById('messages');
             const messageDiv = document.createElement('div');
-            messageDiv.className = \`message-slide-in \${isUser ? 'ml-8' : 'mr-8'}\`;
+            messageDiv.className = \`message \${isUser ? 'user' : 'assistant'}\`;
             
             messageDiv.innerHTML = \`
-                <div class="flex items-start space-x-3 \${isUser ? 'flex-row-reverse space-x-reverse' : ''}">
-                    <div class="w-8 h-8 rounded-full \${isUser ? 'bg-green-600' : 'bg-blue-600'} flex items-center justify-center text-white text-sm font-bold">
-                        \${isUser ? 'U' : 'R'}
-                    </div>
-                    <div class="flex-1 \${isUser ? 'bg-green-800' : 'bg-gray-800'} rounded-lg p-3">
-                        <div class="text-sm">\${content}</div>
-                        \${timestamp ? \`<div class="text-xs text-gray-400 mt-1">\${timestamp}</div>\` : ''}
-                    </div>
+                <div class="avatar \${isUser ? 'user' : 'assistant'}">\${isUser ? 'U' : 'R'}</div>
+                <div class="message-content">
+                    <div>\${content}</div>
+                    \${timestamp ? \`<div style="font-size: 11px; color: #6b7280; margin-top: 4px;">\${timestamp}</div>\` : ''}
                 </div>
             \`;
             
-            wrapper.appendChild(messageDiv);
+            messages.appendChild(messageDiv);
             scrollToBottom();
         }
 
-        function showTypingIndicator() {
-            if (currentStreamingMessage) return;
-            
-            const wrapper = document.getElementById('messagesWrapper');
+        function showTyping() {
+            const messages = document.getElementById('messages');
             const typingDiv = document.createElement('div');
-            typingDiv.className = 'typing-message message-slide-in mr-8';
+            typingDiv.className = 'message assistant typing-message';
             typingDiv.innerHTML = \`
-                <div class="flex items-start space-x-3">
-                    <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-bold">R</div>
-                    <div class="flex-1 bg-gray-800 rounded-lg p-3">
-                        <div class="flex items-center space-x-2 text-sm text-gray-400">
-                            <span>Thinking</span>
-                            <div class="flex space-x-1 typing-dots">
-                                <div class="w-1 h-1 bg-gray-400 rounded-full animate-bounce"></div>
-                                <div class="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
-                                <div class="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
-                            </div>
+                <div class="avatar assistant">R</div>
+                <div class="message-content">
+                    <div class="typing">
+                        <span>Thinking</span>
+                        <div class="typing-dots">
+                            <div class="typing-dot"></div>
+                            <div class="typing-dot"></div>
+                            <div class="typing-dot"></div>
                         </div>
                     </div>
                 </div>
             \`;
-            
-            wrapper.appendChild(typingDiv);
+            messages.appendChild(typingDiv);
             scrollToBottom();
-            isThinking = true;
         }
 
-        function hideTypingIndicator() {
+        function hideTyping() {
             const typingMsg = document.querySelector('.typing-message');
             if (typingMsg) {
                 typingMsg.remove();
             }
-            isThinking = false;
-        }
-
-        function handleStreamingToken(token, fullMessage) {
-            if (!currentStreamingMessage) {
-                hideTypingIndicator();
-                
-                const wrapper = document.getElementById('messagesWrapper');
-                currentStreamingMessage = document.createElement('div');
-                currentStreamingMessage.className = 'streaming-message message-slide-in mr-8';
-                currentStreamingMessage.innerHTML = \`
-                    <div class="flex items-start space-x-3">
-                        <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-bold">R</div>
-                        <div class="flex-1 bg-gray-800 rounded-lg p-3">
-                            <div class="text-sm content-area"></div>
-                        </div>
-                    </div>
-                \`;
-                wrapper.appendChild(currentStreamingMessage);
-            }
-
-            const contentDiv = currentStreamingMessage.querySelector('.content-area');
-            
-            // ChatGPT-style character-by-character typing effect
-            if (document.getElementById('enableStreaming')?.checked) {
-                const currentText = contentDiv.textContent || '';
-                const newText = fullMessage;
-                
-                if (newText.length > currentText.length) {
-                    const nextChar = newText[currentText.length];
-                    contentDiv.innerHTML = newText.substring(0, currentText.length + 1) + '<span class="typing-cursor text-blue-400">▋</span>';
-                    
-                    // Continue typing with delay
-                    setTimeout(() => {
-                        if (contentDiv && newText.length > currentText.length + 1) {
-                            contentDiv.innerHTML = newText.substring(0, currentText.length + 2) + '<span class="typing-cursor text-blue-400">▋</span>';
-                        }
-                    }, 50); // Fast typing speed
-                }
-            } else {
-                contentDiv.innerHTML = fullMessage + '<span class="typing-cursor text-blue-400">▋</span>';
-            }
-            
-            scrollToBottom();
-        }
-
-        function finalizeStreamingMessage(finalMessage, formattedMessage) {
-            if (currentStreamingMessage) {
-                const contentDiv = currentStreamingMessage.querySelector('.content-area');
-                contentDiv.innerHTML = formattedMessage || finalMessage;
-                currentStreamingMessage.classList.remove('streaming-message');
-                currentStreamingMessage = null;
-            }
-            scrollToBottom();
         }
 
         function scrollToBottom() {
-            const container = document.getElementById('chatContainer');
+            const container = document.querySelector('.chat-container');
             setTimeout(() => {
                 container.scrollTop = container.scrollHeight;
-            }, 50);
+            }, 10);
         }
 
         function toggleSettings() {
+            console.log('[WEBVIEW] Toggle settings clicked');
             const panel = document.getElementById('settingsPanel');
-            panel.classList.toggle('hidden');
-            if (!panel.classList.contains('hidden')) {
+            panel.classList.toggle('visible');
+            
+            if (panel.classList.contains('visible') && vscode) {
                 vscode.postMessage({ type: 'getSettings' });
             }
         }
 
-        function updateMcpSettings() {
-            const connectionType = document.getElementById('mcpConnectionType').value;
-            const stdioSection = document.getElementById('mcpStdioSection');
-            const serverSection = document.getElementById('mcpServerSection');
+        function saveSettings() {
+            console.log('[WEBVIEW] Save settings clicked');
             
-            if (connectionType === 'stdio') {
-                stdioSection.classList.remove('hidden');
-                serverSection.classList.add('hidden');
-            } else {
-                stdioSection.classList.add('hidden');
-                serverSection.classList.remove('hidden');
+            const settings = {
+                model: document.getElementById('modelSelect')?.value || 'llama3.2:1b'
+            };
+            
+            if (vscode) {
+                vscode.postMessage({ type: 'saveSettings', settings });
             }
         }
 
-        function saveSettings() {
-            const settings = {
-                model: document.getElementById('modelSelect').value,
-                mcpConnectionType: document.getElementById('mcpConnectionType').value,
-                mcpStdioCommand: document.getElementById('mcpStdioCommand').value,
-                mcpStdioArgs: JSON.parse(document.getElementById('mcpStdioArgs').value || '[]'),
-                mcpTimeout: parseInt(document.getElementById('mcpTimeout').value) || 2000,
-                mcpServerUrl: document.getElementById('mcpServerUrl').value,
-                mcpApiKey: document.getElementById('mcpApiKey').value,
-                enableStreaming: document.getElementById('enableStreaming').checked,
-                enableFastMode: document.getElementById('enableFastMode').checked
-            };
-
-            vscode.postMessage({ type: 'saveSettings', settings });
-        }
-
         function testConnection() {
-            vscode.postMessage({ type: 'testConnection' });
+            console.log('[WEBVIEW] Test connection clicked');
+            
+            if (vscode) {
+                vscode.postMessage({ type: 'testConnection' });
+            }
         }
 
         function refreshModels() {
-            vscode.postMessage({ type: 'refreshModels' });
-        }
-
-        function resetToDefaults() {
-            document.getElementById('modelSelect').value = 'llama3.2:1b';
-            document.getElementById('mcpConnectionType').value = 'stdio';
-            document.getElementById('mcpStdioCommand').value = 'node';
-            document.getElementById('mcpStdioArgs').value = '[\"-e\", \"console.log(\'MCP Ready\'); process.stdin.pipe(process.stdout);\"]';
-            document.getElementById('mcpTimeout').value = '2000';
-            document.getElementById('enableStreaming').checked = true;
-            document.getElementById('enableFastMode').checked = true;
-            updateMcpSettings();
-        }
-
-        // Message handlers
-        window.addEventListener('message', function(event) {
-            const message = event.data;
-            console.log('Received message:', message);
+            console.log('[WEBVIEW] Refresh models clicked');
             
-            const sendButton = document.getElementById('sendButton');
+            if (vscode) {
+                vscode.postMessage({ type: 'refreshModels' });
+            }
+        }
+
+        // Message handler
+        window.addEventListener('message', event => {
+            const message = event.data;
+            console.log('[WEBVIEW] Received message:', message);
+            
+            const sendBtn = document.getElementById('sendBtn');
             
             switch (message.type) {
                 case 'userMessage':
-                    addMessage(message.message, true);
+                    // Already added in sendMessage
                     break;
+                    
                 case 'startTyping':
-                    showTypingIndicator();
-                    if (sendButton) sendButton.disabled = true;
+                    showTyping();
+                    isThinking = true;
+                    if (sendBtn) sendBtn.disabled = true;
                     break;
-                case 'streamToken':
-                    handleStreamingToken(message.token, message.fullMessage);
-                    break;
+                    
                 case 'assistantMessage':
-                    hideTypingIndicator();
-                    finalizeStreamingMessage(message.message, message.formatted);
-                    if (sendButton) sendButton.disabled = false;
+                    hideTyping();
+                    addMessage(message.formatted || message.message, false);
+                    isThinking = false;
+                    if (sendBtn) sendBtn.disabled = false;
                     break;
+                    
                 case 'error':
-                    hideTypingIndicator();
+                    hideTyping();
                     addMessage('❌ ' + message.message, false);
-                    if (sendButton) sendButton.disabled = false;
+                    isThinking = false;
+                    if (sendBtn) sendBtn.disabled = false;
                     break;
+                    
                 case 'settingsLoaded':
-                    const settings = message.settings;
-                    document.getElementById('modelSelect').value = settings.model;
-                    document.getElementById('mcpConnectionType').value = settings.mcpConnectionType;
-                    document.getElementById('mcpStdioCommand').value = settings.mcpStdioCommand;
-                    document.getElementById('mcpStdioArgs').value = JSON.stringify(settings.mcpStdioArgs);
-                    document.getElementById('mcpTimeout').value = settings.mcpTimeout;
-                    document.getElementById('mcpServerUrl').value = settings.mcpServerUrl;
-                    document.getElementById('mcpApiKey').value = settings.mcpApiKey;
-                    document.getElementById('enableStreaming').checked = settings.enableStreaming;
-                    document.getElementById('enableFastMode').checked = settings.enableFastMode;
-                    updateMcpSettings();
+                    const modelSelect = document.getElementById('modelSelect');
+                    if (modelSelect && message.settings) {
+                        modelSelect.value = message.settings.model || 'llama3.2:1b';
+                    }
                     break;
+                    
                 case 'settingsSaved':
                     addMessage(message.message, false);
-                    document.getElementById('statusIndicator').textContent = '⚡ Fast Mode';
-                    document.getElementById('statusIndicator').className = 'text-xs text-green-400';
+                    document.getElementById('status').textContent = '⚡ Ready';
                     break;
+                    
                 case 'connectionTest':
                     addMessage(message.message, false);
                     break;
+                    
                 case 'modelsRefreshed':
-                    // Update model dropdowns
-                    const modelSelect = document.getElementById('modelSelect');
-                    const currentValue = modelSelect.value;
-                    modelSelect.innerHTML = '';
-                    message.models.forEach(model => {
-                        const option = document.createElement('option');
-                        option.value = model;
-                        option.textContent = model;
-                        modelSelect.appendChild(option);
-                    });
-                    if (message.models.includes(currentValue)) {
-                        modelSelect.value = currentValue;
+                    // Update model dropdown
+                    const select = document.getElementById('modelSelect');
+                    if (select && message.models) {
+                        const currentValue = select.value;
+                        select.innerHTML = '';
+                        message.models.forEach(model => {
+                            const option = document.createElement('option');
+                            option.value = model;
+                            option.textContent = model;
+                            select.appendChild(option);
+                        });
+                        if (message.models.includes(currentValue)) {
+                            select.value = currentValue;
+                        }
                     }
                     break;
             }
         });
 
-        // Initialize
-        setTimeout(() => {
-            document.getElementById('chatInput').focus();
-            // Request initial settings
-            vscode.postMessage({ type: 'getSettings' });
-        }, 100);
+        // Initialize when DOM is loaded
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+        
+        console.log('[WEBVIEW] Script setup complete');
     </script>
 </body>
 </html>`;
@@ -640,4 +794,12 @@ class ChatProvider {
 }
 exports.ChatProvider = ChatProvider;
 ChatProvider.viewType = 'replitCopilotChat';
+function getNonce() {
+    let text = '';
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    for (let i = 0; i < 32; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return text;
+}
 //# sourceMappingURL=chatProvider.js.map
