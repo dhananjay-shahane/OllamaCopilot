@@ -21,8 +21,10 @@ class ChatProvider {
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
         // Handle messages from the webview
         webviewView.webview.onDidReceiveMessage(async (message) => {
+            console.log('[REPLIT-COPILOT] Backend received message:', message);
             switch (message.type) {
                 case 'sendMessage':
+                    console.log('[REPLIT-COPILOT] Handling chat message:', message.text);
                     await this.handleChatMessage(message.text);
                     break;
                 case 'applyEdit':
@@ -59,6 +61,7 @@ class ChatProvider {
         }, undefined);
     }
     async handleChatMessage(message) {
+        console.log('[REPLIT-COPILOT] Processing chat message:', message);
         try {
             // Add user message to chat
             this.postMessage({
@@ -423,8 +426,12 @@ class ChatProvider {
         }
     }
     postMessage(message) {
+        console.log('[REPLIT-COPILOT] Sending message to webview:', message);
         if (this._view) {
             this._view.webview.postMessage(message);
+        }
+        else {
+            console.error('[REPLIT-COPILOT] No webview available to send message to');
         }
     }
     _getHtmlForWebview(webview) {
@@ -1260,11 +1267,26 @@ class ChatProvider {
 
     <script>
         (function() {
+            console.log('[WEBVIEW] Starting webview initialization...');
+            
             const vscode = acquireVsCodeApi();
             const chatContainer = document.getElementById('chatContainer');
             const messagesWrapper = document.getElementById('messagesWrapper');
             const chatInput = document.getElementById('chatInput');
             const sendButton = document.getElementById('sendButton');
+            
+            console.log('[WEBVIEW] Elements found:', {
+                chatContainer: !!chatContainer,
+                messagesWrapper: !!messagesWrapper,
+                chatInput: !!chatInput,
+                sendButton: !!sendButton
+            });
+            
+            if (!chatInput || !sendButton) {
+                console.error('[WEBVIEW] Critical elements not found!');
+                return;
+            }
+            
             let isThinking = false;
             let currentStreamingMessage = null;
 
@@ -1335,15 +1357,27 @@ class ChatProvider {
             }
 
             function sendMessage() {
+                console.log('[WEBVIEW] sendMessage called');
+                if (!chatInput) {
+                    console.error('[WEBVIEW] chatInput not found');
+                    return;
+                }
+                
                 const message = chatInput.value.trim();
-                if (!message || isThinking) return;
+                console.log('[WEBVIEW] Message to send:', message);
+                
+                if (!message || isThinking) {
+                    console.log('[WEBVIEW] No message or already thinking');
+                    return;
+                }
 
                 addMessage(message, true);
                 chatInput.value = '';
                 chatInput.style.height = 'auto';
-                sendButton.disabled = true;
+                if (sendButton) sendButton.disabled = true;
                 showThinking();
 
+                console.log('[WEBVIEW] Sending message to backend...');
                 vscode.postMessage({
                     type: 'sendMessage',
                     text: message
@@ -1596,19 +1630,33 @@ class ChatProvider {
             window.closeMCPModal = closeMCPModal;
             window.addMCPServer = addMCPServer;
 
-            sendButton.addEventListener('click', sendMessage);
-            
-            chatInput.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter' && !e.shiftKey) {
+            // Add event listeners with error handling
+            if (sendButton) {
+                sendButton.addEventListener('click', function(e) {
+                    console.log('[WEBVIEW] Send button clicked');
                     e.preventDefault();
                     sendMessage();
-                }
-            });
+                });
+                console.log('[WEBVIEW] Send button listener attached');
+            }
+            
+            if (chatInput) {
+                chatInput.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        console.log('[WEBVIEW] Enter key pressed');
+                        e.preventDefault();
+                        sendMessage();
+                    }
+                });
+                console.log('[WEBVIEW] Chat input listener attached');
+            }
 
             window.addEventListener('message', function(event) {
                 const message = event.data;
+                console.log('[WEBVIEW] Received message from backend:', message);
+                
                 hideThinking();
-                sendButton.disabled = false;
+                if (sendButton) sendButton.disabled = false;
 
                 switch (message.type) {
                     case 'startTyping':
