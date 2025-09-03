@@ -111,10 +111,15 @@ export class OllamaClient {
 
                                 // Keep conversation history manageable
                                 if (this.conversationHistory.length > 21) {
-                                    this.conversationHistory = [
-                                        this.conversationHistory[0],
-                                        ...this.conversationHistory.slice(-20)
-                                    ];
+                                    const systemMessage = this.conversationHistory[0];
+                                    if (systemMessage) {
+                                        this.conversationHistory = [
+                                            systemMessage,
+                                            ...this.conversationHistory.slice(-20)
+                                        ];
+                                    } else {
+                                        this.conversationHistory = this.conversationHistory.slice(-20);
+                                    }
                                 }
                                 resolve(assistantMessage || 'Sorry, I couldn\'t generate a response.');
                             }
