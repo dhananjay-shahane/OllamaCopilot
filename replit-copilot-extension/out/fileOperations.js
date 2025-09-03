@@ -245,7 +245,11 @@ class FileOperationsManager {
             if (!workspaceFolders) {
                 throw new Error('No workspace folder open');
             }
-            const rootPath = workspaceFolders[0].uri.fsPath;
+            const firstWorkspace = workspaceFolders[0];
+            if (!firstWorkspace) {
+                throw new Error('No workspace folder available');
+            }
+            const rootPath = firstWorkspace.uri.fsPath;
             const files = await vscode.workspace.findFiles('**/*', '**/node_modules/**');
             const structure = {};
             const languages = new Set();
