@@ -63,7 +63,8 @@ class ChatProvider {
                     token: token,
                     fullMessage: fullResponse
                 });
-            });
+            }, true // includeContext parameter
+            );
             const responseTime = Date.now() - startTime;
             console.log(`[REPLIT-COPILOT] Response time: ${responseTime}ms`);
             // Final complete message

@@ -76,16 +76,20 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             let fullResponse = '';
             const startTime = Date.now();
             
-            const response = await this.ollamaClient.chat(message, (token) => {
-                fullResponse += token;
-                
-                // Send streaming tokens with ChatGPT-style effect
-                this.postMessage({
-                    type: 'streamToken',
-                    token: token,
-                    fullMessage: fullResponse
-                });
-            });
+            const response = await this.ollamaClient.chat(
+                message, 
+                (token) => {
+                    fullResponse += token;
+                    
+                    // Send streaming tokens with ChatGPT-style effect
+                    this.postMessage({
+                        type: 'streamToken',
+                        token: token,
+                        fullMessage: fullResponse
+                    });
+                },
+                true // includeContext parameter
+            );
             
             const responseTime = Date.now() - startTime;
             console.log(`[REPLIT-COPILOT] Response time: ${responseTime}ms`);
