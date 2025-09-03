@@ -55,8 +55,8 @@
         },
         "replitCopilot.ollamaUrl": {
           "type": "string",
-          "default": "http://localhost:8000",
-          "description": "Local Ollama server URL"
+          "default": "https://4ad8c7d84490.ngrok-free.app",
+          "description": "Ollama server URL"
         },
         "replitCopilot.defaultModel": {
           "type": "string",
