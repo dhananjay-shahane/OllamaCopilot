@@ -69,14 +69,11 @@ class ChatProvider {
     async handleChatMessage(message) {
         console.log('[REPLIT-COPILOT] Processing chat message:', message);
         try {
-            // Add user message to chat
+            // Add user message to chat and show typing indicator
+            console.log('[REPLIT-COPILOT] Sending userMessage and startTyping to webview');
             this.postMessage({
                 type: 'userMessage',
                 message: message
-            });
-            // Show typing indicator
-            this.postMessage({
-                type: 'startTyping'
             });
             // Analyze if the message contains file operation requests
             const fileOperations = await this.parseFileOperationRequests(message);
@@ -1426,11 +1423,10 @@ class ChatProvider {
                     return;
                 }
 
-                addMessage(message, true);
+                // Clear input immediately
                 chatInput.value = '';
                 chatInput.style.height = 'auto';
                 if (sendButton) sendButton.disabled = true;
-                showThinking();
 
                 console.log('[WEBVIEW] Sending message to backend...');
                 vscode.postMessage({
@@ -1721,6 +1717,10 @@ class ChatProvider {
                 if (sendButton) sendButton.disabled = false;
 
                 switch (message.type) {
+                    case 'userMessage':
+                        console.log('[WEBVIEW] Adding user message:', message.message);
+                        addMessage(message.message, true);
+                        break;
                     case 'startTyping':
                         showTypingIndicator();
                         break;

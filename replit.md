@@ -42,7 +42,7 @@ replit-copilot-extension/
 ```
 
 ## Recent Changes
-**2025-09-03**: Complete VS Code workflow integration
+**2025-09-03**: Complete VS Code workflow integration and chat functionality fixes
 - Created VS Code extension scaffold with TypeScript
 - Implemented ChatGPT-style chat interface with streaming responses and typing effects
 - Added comprehensive Ollama LLM integration with conversation history and llama3.2:1b support
@@ -55,6 +55,7 @@ replit-copilot-extension/
 - Created code analysis tools: view_diff, codebase understanding, fetch_url_content
 - Enhanced system prompt with detailed tool documentation and VS Code context awareness
 - Set up development workflow with TypeScript compilation and error-free compilation
+- **Fixed critical chat functionality issues**: Added missing userMessage handler, fixed duplicate message handling, improved message flow and user interaction
 
 ## User Preferences
 - Architecture follows modern VS Code extension patterns
